@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect 4</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #333;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(7, 60px);
+            grid-template-rows: repeat(6, 60px);
+            gap: 5px;
+            margin: 20px auto;
+            background-color: #0047AB;
+            padding: 10px;
+            border-radius: 10px;
+            width: fit-content;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .cell.red { background-color: red; }
+        .cell.yellow { background-color: yellow; }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Connect 4</h1>
+    <h2 id="status">Red's Turn</h2>
+    <div id="board"></div>
+    <button onclick="resetGame()">Restart</button>
+
+    <script>
+        const ROWS = 6, COLS = 7;
+        let board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+        let currentPlayer = "red"; 
+        let gameActive = true;
+
+        const boardElement = document.getElementById("board");
+        const statusElement = document.getElementById("status");
+
+        function createBoard() {
+            boardElement.innerHTML = "";
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const cell = document.createElement("div");
+                    cell.classList.add("cell");
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    cell.addEventListener("click", () => dropPiece(c));
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function dropPiece(col) {
+            if (!gameActive) return;
+
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (!board[r][col]) {
+                    board[r][col] = currentPlayer;
+                    updateBoard();
+                    if (checkWin(r, col)) {
+                        statusElement.textContent = `${currentPlayer.toUpperCase()} Wins!`;
+                        gameActive = false;
+                    } else {
+                        currentPlayer = currentPlayer === "red" ? "yellow" : "red";
+                        statusElement.textContent = `${currentPlayer.toUpperCase()}'s Turn`;
+                    }
+                    return;
+                }
+            }
+        }
+
+        function updateBoard() {
+            document.querySelectorAll(".cell").forEach(cell => {
+                const r = cell.dataset.row;
+                const c = cell.dataset.col;
+                cell.classList.remove("red", "yellow");
+                if (board[r][c]) {
+                    cell.classList.add(board[r][c]);
+                }
+            });
+        }
+
+        function checkWin(row, col) {
+            return checkDirection(row, col, 1, 0) || // Vertical
+                   checkDirection(row, col, 0, 1) || // Horizontal
+                   checkDirection(row, col, 1, 1) || // Diagonal /
+                   checkDirection(row, col, 1, -1);  // Diagonal \  
+        }
+
+        function checkDirection(row, col, rowStep, colStep) {
+            let count = 1;
+            count += countInDirection(row, col, rowStep, colStep);
+            count += countInDirection(row, col, -rowStep, -colStep);
+            return count >= 4;
+        }
+
+        function countInDirection(row, col, rowStep, colStep) {
+            let r = row + rowStep, c = col + colStep, count = 0;
+            while (r >= 0 && r < ROWS && c >= 0 && c < COLS && board[r][c] === currentPlayer) {
+                count++;
+                r += rowStep;
+                c += colStep;
+            }
+            return count;
+        }
+
+        function resetGame() {
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+            currentPlayer = "red";
+            gameActive = true;
+            statusElement.textContent = "Red's Turn";
+            updateBoard();
+        }
+
+        createBoard();
+    </script>
+
+</body>
+</html>
