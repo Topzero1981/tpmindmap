@@ -30,11 +30,12 @@
     }
   
     function initWidget() {
-      // Global variables for widget size and font size toggles.
-      var currentWidgetSize = "normal"; // "normal" or "large"
+      // Global toggles and counters.
+      var currentWidgetSize = "normal"; // "normal" (small) or "large"
       var currentFontSize = "normal";   // "normal" or "large"
       var currentTasksData = null;
-      var widgetOffset = 0; // Used to vertically space widgets
+      var widgetOffset = 0; // For vertical stacking in large mode
+      var widgetCounter = 0; // For grid layout in normal mode
   
       // Append CSS for the widget, controls, and page scrolling.
       var style = document.createElement("style");
@@ -49,16 +50,15 @@
         }
         .widget {
           position: absolute;
-          /* We'll set the width dynamically */
+          /* Width will be set dynamically */
           background-color: white;
           box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
           border-radius: 8px;
           overflow: hidden;
           z-index: 1000;
         }
-        /* When in large mode, allow a larger max width */
         .widget.large {
-          /* no fixed max-width here as width is set dynamically */
+          /* In large mode, we stack vertically */
         }
         .widget-header {
           background-color: #4caf50;
@@ -71,6 +71,8 @@
         }
         .widget-content {
           padding: 10px;
+          /* Enable horizontal scrolling if needed */
+          overflow-x: auto;
         }
         .chart {
           background-color: #f9f9f9;
@@ -99,7 +101,6 @@
           z-index: 2000;
         }
         .axis text {
-          /* Default axis text size (will be updated programmatically) */
           font-size: 10px;
         }
         /* Excel Uploader button */
@@ -183,7 +184,7 @@
       `;
       document.head.appendChild(style);
   
-      // Create tooltip element if not already present.
+      // Create tooltip element.
       if (!document.getElementById("tooltip")) {
         var tooltip = document.createElement("div");
         tooltip.setAttribute("id", "tooltip");
@@ -210,13 +211,13 @@
       fontSizeToggleDiv.innerHTML = `<button id="toggleFontButton">Switch to Large Font</button>`;
       document.body.appendChild(fontSizeToggleDiv);
   
-      // Setup Excel upload event handlers.
+      // Excel upload event handlers.
       document.getElementById("uploadExcelButton").addEventListener("click", function () {
         document.getElementById("excelFileInput").click();
       });
       document.getElementById("excelFileInput").addEventListener("change", handleExcelUpload);
   
-      // Toggle widget size on button click.
+      // Widget size toggle.
       document.getElementById("toggleSizeButton").addEventListener("click", function () {
         if (currentWidgetSize === "normal") {
           currentWidgetSize = "large";
@@ -225,12 +226,14 @@
           currentWidgetSize = "normal";
           this.textContent = "Switch to Large Widgets";
         }
+        // Reset grid counter for normal mode.
+        widgetCounter = 0;
         if (currentTasksData) {
           renderWidgets(currentTasksData);
         }
       });
   
-      // Toggle font size on button click.
+      // Font size toggle.
       document.getElementById("toggleFontButton").addEventListener("click", function () {
         if (currentFontSize === "normal") {
           currentFontSize = "large";
@@ -244,7 +247,7 @@
         }
       });
   
-      // Helper: Make a widget draggable.
+      // Make widget draggable.
       function makeDraggable(selection) {
         var isDragging = false;
         var startX, startY, offsetX = 0, offsetY = 0;
@@ -271,8 +274,7 @@
           });
       }
   
-      // Helper function to wrap long text labels.
-      // Increased lineHeight to 1.4 for more vertical spacing.
+      // Wrap long text labels with increased line height.
       function wrap(text, width) {
         text.each(function() {
           var textEl = d3.select(this),
@@ -280,7 +282,7 @@
               word,
               line = [],
               lineNumber = 0,
-              lineHeight = 1.4, // increased line height
+              lineHeight = 1.4,
               y = textEl.attr("y"),
               dy = parseFloat(textEl.attr("dy")) || 0,
               tspan = textEl.text(null)
@@ -305,10 +307,12 @@
         });
       }
   
-      // Function to render (or re-render) all widgets based on current task data.
+      // Render (or re-render) all widgets.
       function renderWidgets(tasks) {
         d3.selectAll('.widget').remove();
+        // Reset counters.
         widgetOffset = 0;
+        widgetCounter = 0;
         var projects = Array.from(new Set(tasks.map(d => d.project)));
         projects.forEach(function (project) {
           var tasksForProject = tasks.filter(d => d.project === project)
@@ -321,23 +325,16 @@
   
       // Create a Gantt chart widget for a given project and its tasks.
       function createGanttChart(containerSelector, project, tasks) {
+        // Create container without fixed top/left yet.
         var container = d3.select(containerSelector)
-          .append("div")
-          .attr("class", "widget")
-          .style("top", (20 + widgetOffset) + "px")
-          .style("left", "20px")
-          .call(makeDraggable);
-        
-        if (currentWidgetSize === "large") {
-          container.classed("large", true);
-        }
-        
-        // Base left margin (if not increased by long text)
+                          .append("div")
+                          .attr("class", "widget")
+                          .call(makeDraggable);
+  
+        // Determine base left margin and text font size.
         var baseLeftMargin = currentWidgetSize === "normal" ? 80 : 100;
-        
-        // Determine text font size.
         var textFontSize = currentFontSize === "normal" ? 10 : 14;
-        
+  
         // Use a hidden canvas to measure maximum label width.
         var canvas = document.createElement("canvas");
         var ctx = canvas.getContext("2d");
@@ -349,7 +346,7 @@
             maxLabelWidth = labelWidth;
           }
         });
-        // Increase left margin if needed (add 20px padding).
+        // Set left margin to be at least the base value or (max label width + 20px padding)
         var dynamicLeftMargin = Math.max(baseLeftMargin, maxLabelWidth + 20);
         
         // Set margins.
@@ -359,64 +356,81 @@
           bottom: 50,
           left: dynamicLeftMargin
         };
-        
-        // Increase the minimum bar height to ensure y-axis labels have enough space.
+  
+        // Set minimum bar height.
         var minBarHeight = currentFontSize === "normal" 
-                            ? (currentWidgetSize === "normal" ? 30 : 35)
-                            : (currentWidgetSize === "normal" ? 45 : 50);
-        
+                           ? (currentWidgetSize === "normal" ? 30 : 35)
+                           : (currentWidgetSize === "normal" ? 45 : 50);
+  
         var defaultChartHeight = (currentWidgetSize === "normal" ? 200 : 400) - margin.top - margin.bottom;
         var naturalChartHeight = Math.max(defaultChartHeight, tasks.length * minBarHeight);
         var naturalContainerHeight = naturalChartHeight + margin.top + margin.bottom;
-        
-        // Set a maximum overall container height.
+  
+        // Set maximum container height.
         var maxContainerHeight = currentWidgetSize === "normal" ? 400 : 600;
         var actualContainerHeight = Math.min(naturalContainerHeight, maxContainerHeight);
         var headerHeight = 40; // fixed header height
-        
-        if (naturalContainerHeight > maxContainerHeight) {
-          container.style("height", actualContainerHeight + "px");
-        }
-        
-        // Dynamically compute overall widget width.
-        // Base widget width is defined as follows:
+  
+        // Compute base widget width.
         var baseWidgetWidth = currentWidgetSize === "normal" ? 360 : 800;
-        // If our dynamic left margin is larger than the base, add the extra width.
-        var overallWidgetWidth = baseWidgetWidth + (dynamicLeftMargin - baseLeftMargin);
-        // Ensure we do not exceed the available screen width.
+        // Increase overall widget width if dynamic left margin is larger.
+        // Also add an extra 20px to avoid horizontal scrollbar when possible.
+        var overallWidgetWidth = baseWidgetWidth + (dynamicLeftMargin - baseLeftMargin) + 20;
         overallWidgetWidth = Math.min(window.innerWidth - 40, overallWidgetWidth);
-        
-        // Set the container width explicitly.
+  
+        // Set container width explicitly.
         container.style("width", overallWidgetWidth + "px");
-        
-        // Chart width is overall widget width minus margins.
+  
+        // Compute chart width.
         var width = overallWidgetWidth - margin.left - margin.right;
-        
-        widgetOffset += actualContainerHeight + 20;
-        
+  
+        // Set container position.
+        if (currentWidgetSize === "normal") {
+          // Grid layout: two columns.
+          var col = widgetCounter % 2;
+          var row = Math.floor(widgetCounter / 2);
+          var leftPos = 20 + col * (overallWidgetWidth + 20);
+          var topPos = 20 + row * (actualContainerHeight + 20);
+          container.style("left", leftPos + "px")
+                   .style("top", topPos + "px");
+          widgetCounter++;
+        } else {
+          // Large widgets: vertical stacking.
+          container.style("left", "20px")
+                   .style("top", (20 + widgetOffset) + "px");
+          widgetOffset += actualContainerHeight + 20;
+        }
+  
+        // Append header.
         container.append("div")
-          .attr("class", "widget-header")
-          .text("Project: " + project);
-        
-        var content = container.append("div").attr("class", "widget-content");
+                 .attr("class", "widget-header")
+                 .text("Project: " + project);
+  
+        // Append content area.
+        var content = container.append("div")
+                               .attr("class", "widget-content");
+        // Enable vertical scrolling if needed.
         if (naturalContainerHeight > maxContainerHeight) {
           content.style("height", (actualContainerHeight - headerHeight) + "px")
                  .style("overflow-y", "auto");
         }
-        
+        // Always allow horizontal scrolling.
+        content.style("overflow-x", "auto");
+  
+        // Append SVG chart.
         var svg = content.append("svg")
-          .attr("class", "chart")
-          .attr("width", overallWidgetWidth)
-          .attr("height", naturalContainerHeight)
-          .append("g")
-          .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-        
+                         .attr("class", "chart")
+                         .attr("width", overallWidgetWidth)
+                         .attr("height", naturalContainerHeight)
+                         .append("g")
+                         .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+  
         var minDate = d3.min(tasks, d => d.start);
         var maxDate = d3.max(tasks, d => d.end);
         var xScale = d3.scaleTime()
-          .domain([d3.timeDay.offset(minDate, -1), d3.timeDay.offset(maxDate, 1)])
-          .range([0, width]);
-        
+                       .domain([d3.timeDay.offset(minDate, -1), d3.timeDay.offset(maxDate, 1)])
+                       .range([0, width]);
+  
         var diffDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
         var tickInterval, tickFormat;
         if (diffDays < 30) {
@@ -429,81 +443,80 @@
           tickInterval = d3.timeMonth.every(1);
           tickFormat = d3.timeFormat("%b %Y");
         }
-        
+  
         var yScale = d3.scaleBand()
-          .domain(tasks.map(d => d.name))
-          .range([0, naturalChartHeight])
-          .padding(0.2);
-        
+                       .domain(tasks.map(d => d.name))
+                       .range([0, naturalChartHeight])
+                       .padding(0.2);
+  
         svg.append("g")
-          .attr("class", "x-axis")
-          .attr("transform", "translate(0," + naturalChartHeight + ")")
-          .call(d3.axisBottom(xScale)
-                  .ticks(tickInterval)
-                  .tickFormat(tickFormat))
-          .selectAll("text")
-          .attr("transform", "rotate(-45)")
-          .style("text-anchor", "end")
-          .attr("dx", "-0.5em")
-          .attr("dy", "0.15em");
-        
+           .attr("class", "x-axis")
+           .attr("transform", "translate(0," + naturalChartHeight + ")")
+           .call(d3.axisBottom(xScale)
+                   .ticks(tickInterval)
+                   .tickFormat(tickFormat))
+           .selectAll("text")
+           .attr("transform", "rotate(-45)")
+           .style("text-anchor", "end")
+           .attr("dx", "-0.5em")
+           .attr("dy", "0.15em");
+  
         var yAxis = d3.axisLeft(yScale);
         var yAxisG = svg.append("g")
-          .attr("class", "y-axis")
-          .call(yAxis);
+                        .attr("class", "y-axis")
+                        .call(yAxis);
         yAxisG.selectAll("text").call(wrap, margin.left - 10);
-        
-        // Set font sizes based on the current font toggle.
+  
         svg.selectAll(".x-axis text").style("font-size", textFontSize + "px");
         yAxisG.selectAll("text").style("font-size", textFontSize + "px");
-        
+  
         var tooltipSelection = d3.select("#tooltip");
-        
+  
         svg.selectAll(".bar")
-          .data(tasks)
-          .enter()
-          .append("rect")
-          .attr("class", "bar")
-          .attr("x", d => xScale(d.start))
-          .attr("y", d => yScale(d.name))
-          .attr("width", d => xScale(d.end) - xScale(d.start))
-          .attr("height", yScale.bandwidth())
-          .attr("fill", d => d.color)
-          .on("mouseover touchstart", function (event, d) {
-            tooltipSelection
-              .style("opacity", 1)
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px")
-              .html("<strong>" + d.name + "</strong><br><em>" + d.description + "</em><br><strong>Assigned:</strong> " + d.persons);
-          })
-          .on("mousemove touchmove", function (event) {
-            tooltipSelection
-              .style("left", (event.pageX + 10) + "px")
-              .style("top", (event.pageY + 10) + "px");
-          })
-          .on("mouseout touchend", function () {
-            tooltipSelection.style("opacity", 0);
-          });
-        
+           .data(tasks)
+           .enter()
+           .append("rect")
+           .attr("class", "bar")
+           .attr("x", d => xScale(d.start))
+           .attr("y", d => yScale(d.name))
+           .attr("width", d => xScale(d.end) - xScale(d.start))
+           .attr("height", yScale.bandwidth())
+           .attr("fill", d => d.color)
+           .on("mouseover touchstart", function (event, d) {
+             tooltipSelection
+               .style("opacity", 1)
+               .style("left", (event.pageX + 10) + "px")
+               .style("top", (event.pageY + 10) + "px")
+               .html("<strong>" + d.name + "</strong><br><em>" + d.description + "</em><br><strong>Assigned:</strong> " + d.persons);
+           })
+           .on("mousemove touchmove", function (event) {
+             tooltipSelection
+               .style("left", (event.pageX + 10) + "px")
+               .style("top", (event.pageY + 10) + "px");
+           })
+           .on("mouseout touchend", function () {
+             tooltipSelection.style("opacity", 0);
+           });
+  
         svg.selectAll(".bar-text")
-          .data(tasks)
-          .enter()
-          .append("text")
-          .attr("class", "bar-text")
-          .attr("x", d => xScale(d.start) + (xScale(d.end) - xScale(d.start)) / 2)
-          .attr("y", d => yScale(d.name) + yScale.bandwidth() / 2)
-          .text(d => d.name)
-          .style("font-size", textFontSize + "px")
-          .each(function (d) {
-            var textWidth = this.getComputedTextLength();
-            var barWidth = xScale(d.end) - xScale(d.start);
-            if (textWidth > barWidth) {
-              d3.select(this).remove();
-            }
-          });
+           .data(tasks)
+           .enter()
+           .append("text")
+           .attr("class", "bar-text")
+           .attr("x", d => xScale(d.start) + (xScale(d.end) - xScale(d.start)) / 2)
+           .attr("y", d => yScale(d.name) + yScale.bandwidth() / 2)
+           .text(d => d.name)
+           .style("font-size", textFontSize + "px")
+           .each(function (d) {
+             var textWidth = this.getComputedTextLength();
+             var barWidth = xScale(d.end) - xScale(d.start);
+             if (textWidth > barWidth) {
+               d3.select(this).remove();
+             }
+           });
       }
-      
-      // A simple color mapper for tasks based on the assignee.
+  
+      // A simple color mapper.
       var colorMapping = {};
       function getColorFor(name) {
         if (!colorMapping[name]) {
@@ -512,10 +525,8 @@
         }
         return colorMapping[name];
       }
-      
-      // ---------------------------
-      // Excel Upload and Mapping UI
-      // ---------------------------
+  
+      // Excel Upload and Mapping UI functions.
       function handleExcelUpload(event) {
         var file = event.target.files[0];
         if (!file) return;
@@ -535,11 +546,10 @@
         };
         reader.readAsArrayBuffer(file);
       }
-      
+  
       function showMappingUI(headers, sheetData) {
         var mappingDiv = document.createElement("div");
         mappingDiv.setAttribute("id", "mappingUI");
-        
         var mappingFields = [
           { key: "name", label: "Task" },
           { key: "description", label: "Description" },
@@ -548,24 +558,20 @@
           { key: "start", label: "Start Date" },
           { key: "end", label: "Due Date" }
         ];
-        
         var form = document.createElement("form");
         form.id = "mappingForm";
-        
         mappingFields.forEach(function (field) {
           var div = document.createElement("div");
           var label = document.createElement("label");
           label.textContent = field.label + ": ";
           label.htmlFor = field.key + "Select";
           div.appendChild(label);
-        
           var select = document.createElement("select");
           select.id = field.key + "Select";
           var defaultOption = document.createElement("option");
           defaultOption.value = "";
           defaultOption.textContent = "-- Select Column --";
           select.appendChild(defaultOption);
-        
           headers.forEach(function (header) {
             var option = document.createElement("option");
             option.value = header;
@@ -575,7 +581,6 @@
           div.appendChild(select);
           form.appendChild(div);
         });
-        
         var submitButton = document.createElement("button");
         submitButton.textContent = "Process Excel Data";
         submitButton.type = "button";
@@ -586,7 +591,7 @@
         mappingDiv.appendChild(form);
         document.body.appendChild(mappingDiv);
       }
-      
+  
       function processMappingForm(sheetData) {
         var mappingFields = [
           { key: "name", label: "Task" },
@@ -605,13 +610,11 @@
           alert("Please select mappings for Task, Plan/Project, Start Date, and Due Date.");
           return;
         }
-        
         var headers = sheetData[0];
         var mappingIndices = {};
         for (var key in mapping) {
           mappingIndices[key] = headers.indexOf(mapping[key]);
         }
-        
         var tasks = [];
         for (var i = 1; i < sheetData.length; i++) {
           var row = sheetData[i];
@@ -626,24 +629,19 @@
           task.color = getColorFor(task.persons);
           tasks.push(task);
         }
-        
         var mappingDiv = document.getElementById("mappingUI");
         if (mappingDiv) {
           mappingDiv.remove();
         }
-        
         currentTasksData = tasks;
         renderWidgets(tasks);
       }
-      
-      // ---------------------------
-      // Fallback: Generate random tasks if no Excel is uploaded.
-      // ---------------------------
+  
+      // Fallback: Generate random tasks.
       var allTasks = generateRandomTasks(15);
       currentTasksData = allTasks;
       renderWidgets(allTasks);
-      
-      // Function to generate random tasks.
+  
       function generateRandomTasks(numTasks) {
         var names = ["Alice", "Bob", "Charlie", "David", "Eve"];
         var projects = ["Project A", "Project B", "Project C"];
@@ -671,7 +669,7 @@
         return tasks;
       }
     }
-    
+  
     loadD3(function () {
       loadXLSX(initWidget);
     });
