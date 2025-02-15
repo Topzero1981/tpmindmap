@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Game with D3.js</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #fafafa;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-top: 20px;
+            color: #333;
+        }
+        #score {
+            font-size: 1.5rem;
+            margin-top: 10px;
+            color: #333;
+        }
+        #game {
+            margin: auto;
+            display: block;
+            background-color: #222;
+            border: 2px solid #fff;
+            position: relative;
+            width: 90vw;
+            height: 70vh;
+            max-width: 500px;
+            max-height: 500px;
+        }
+
+        /* Control buttons layout */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Horizontal layout for left-right buttons */
+        .horizontal {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .direction-button {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .direction-button:hover {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .direction-button:active {
+            background-color: rgba(0, 0, 0, 1);
+        }
+
+        /* Up and down buttons */
+        .vertical {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Snake Game with D3.js</h1>
+    <div id="score">Score: 0</div>
+    <svg id="game"></svg>
+
+    <!-- Control buttons in cross layout -->
+    <div class="controls">
+        <div class="direction-button" id="up">↑</div>
+        <div class="horizontal">
+            <div class="direction-button" id="left">←</div>
+            <div class="direction-button" id="right">→</div>
+        </div>
+        <div class="direction-button" id="down">↓</div>
+    </div>
+
+    <script>
+        const width = 400;
+        const height = 400;
+        const gridSize = 20;
+        const gridWidth = width / gridSize;
+        const gridHeight = height / gridSize;
+
+        let snake = [
+            {x: 8, y: 8},
+            {x: 7, y: 8},
+            {x: 6, y: 8}
+        ];
+
+        let direction = 'RIGHT'; // Start moving to the right
+        let food = {x: 5, y: 5};
+        let score = 0;
+        let gameInterval;
+        const gameSpeed = 150; // Speed of the snake
+
+        // Create the SVG grid
+        const svg = d3.select('#game');
+        const grid = svg.selectAll('.grid')
+            .data(d3.range(gridWidth * gridHeight))
+            .enter()
+            .append('rect')
+            .attr('x', (d) => (d % gridWidth) * gridSize)
+            .attr('y', (d) => Math.floor(d / gridWidth) * gridSize)
+            .attr('width', gridSize)
+            .attr('height', gridSize)
+            .attr('fill', '#333')
+            .attr('stroke', '#222');
+
+        // Draw the snake
+        const drawSnake = () => {
+            svg.selectAll('.snake').remove();
+            svg.selectAll('.snake')
+                .data(snake)
+                .enter()
+                .append('rect')
+                .attr('class', 'snake')
+                .attr('x', d => d.x * gridSize)
+                .attr('y', d => d.y * gridSize)
+                .attr('width', gridSize)
+                .attr('height', gridSize)
+                .attr('fill', 'green');
+        };
+
+        // Draw the food
+        const drawFood = () => {
+            svg.selectAll('.food').remove();
+            svg.append('rect')
+                .attr('class', 'food')
+                .attr('x', food.x * gridSize)
+                .attr('y', food.y * gridSize)
+                .attr('width', gridSize)
+                .attr('height', gridSize)
+                .attr('fill', 'red');
+        };
+
+        // Update the snake's position
+        const updateSnake = () => {
+            let head = { ...snake[0] };
+
+            // Move snake in the current direction
+            if (direction === 'UP') head.y -= 1;
+            if (direction === 'DOWN') head.y += 1;
+            if (direction === 'LEFT') head.x -= 1;
+            if (direction === 'RIGHT') head.x += 1;
+
+            // Game over if snake hits the walls or itself
+            if (
+                head.x < 0 || head.x >= gridWidth || 
+                head.y < 0 || head.y >= gridHeight || 
+                snake.some(segment => segment.x === head.x && segment.y === head.y)
+            ) {
+                gameOver();
+                return;
+            }
+
+            // Add new head to snake array
+            snake.unshift(head);
+
+            // Check if snake eats the food
+            if (head.x === food.x && head.y === food.y) {
+                score += 10;
+                document.getElementById('score').textContent = 'Score: ' + score;
+                spawnFood(); // Generate new food
+            } else {
+                snake.pop(); // Remove the tail
+            }
+
+            drawSnake();
+            drawFood();
+        };
+
+        // Spawn food in a random position
+        const spawnFood = () => {
+            let newFood = { 
+                x: Math.floor(Math.random() * gridWidth),
+                y: Math.floor(Math.random() * gridHeight)
+            };
+
+            // Avoid placing food on the snake
+            while (snake.some(segment => segment.x === newFood.x && segment.y === newFood.y)) {
+                newFood = { 
+                    x: Math.floor(Math.random() * gridWidth),
+                    y: Math.floor(Math.random() * gridHeight)
+                };
+            }
+            food = newFood;
+        };
+
+        // Handle touch or button input for snake direction
+        const changeDirection = (newDirection) => {
+            if (newDirection === 'UP' && direction !== 'DOWN') {
+                direction = 'UP';
+            }
+            if (newDirection === 'DOWN' && direction !== 'UP') {
+                direction = 'DOWN';
+            }
+            if (newDirection === 'LEFT' && direction !== 'RIGHT') {
+                direction = 'LEFT';
+            }
+            if (newDirection === 'RIGHT' && direction !== 'LEFT') {
+                direction = 'RIGHT';
+            }
+        };
+
+        // Handle swipe events for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        const handleTouchStart = (event) => {
+            touchStartX = event.changedTouches[0].screenX;
+            touchStartY = event.changedTouches[0].screenY;
+        };
+
+        const handleTouchEnd = (event) => {
+            let touchEndX = event.changedTouches[0].screenX;
+            let touchEndY = event.changedTouches[0].screenY;
+
+            let diffX = touchEndX - touchStartX;
+            let diffY = touchEndY - touchStartY;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX > 0) changeDirection('RIGHT');
+                else changeDirection('LEFT');
+            } else {
+                if (diffY > 0) changeDirection('DOWN');
+                else changeDirection('UP');
+            }
+        };
+
+        // Listen for touch events
+        svg.on('touchstart', handleTouchStart)
+            .on('touchend', handleTouchEnd);
+
+        // Button listeners for directional buttons
+        document.getElementById('left').addEventListener('click', () => changeDirection('LEFT'));
+        document.getElementById('right').addEventListener('click', () => changeDirection('RIGHT'));
+        document.getElementById('up').addEventListener('click', () => changeDirection('UP'));
+        document.getElementById('down').addEventListener('click', () => changeDirection('DOWN'));
+
+        // Start the game
+        const startGame = () => {
+            score = 0;
+            snake = [
+                {x: 8, y: 8},
+                {x: 7, y: 8},
+                {x: 6, y: 8}
+            ];
+            direction = 'RIGHT';
+            spawnFood();
+            drawSnake();
+            drawFood();
+            gameInterval = setInterval(updateSnake, gameSpeed);
+        };
+
+        const gameOver = () => {
+            clearInterval(gameInterval);
+            alert('Game Over!');
+            startGame(); // Restart the game after game over
+        };
+
+        // Initialize the game
+        startGame();
+    </script>
+
+</body>
+</html>
