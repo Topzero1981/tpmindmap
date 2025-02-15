@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top-Zero - Two-Player Snake Game</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #fafafa;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-top: 20px;
+            color: #333;
+        }
+        #score {
+            font-size: 1.5rem;
+            margin-top: 10px;
+            color: #333;
+        }
+        #game {
+            margin: auto;
+            display: block;
+            background-color: #222;
+            border: 2px solid #fff;
+            position: relative;
+            width: 90vw;
+            height: 70vh;
+            max-width: 500px;
+            max-height: 500px;
+        }
+
+        /* Controls container */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+
+        /* Cross layout for Player 1 */
+        .player1-controls {
+            left: 10px;  /* Place on the left side */
+        }
+
+        /* Cross layout for Player 2 */
+        .player2-controls {
+            right: 10px;  /* Place on the right side */
+        }
+
+        /* Direction buttons */
+        .direction-button {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .direction-button:hover {
+            background-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .direction-button:active {
+            background-color: rgba(0, 0, 0, 1);
+        }
+
+        /* Horizontal layout for left and right buttons */
+        .horizontal {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        /* Correct position for the cross layout */
+        .player-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Two-Player Snake Game</h1>
+    <div id="score">Player 1: 0 | Player 2: 0</div>
+    <svg id="game"></svg>
+
+    <!-- Player 1 Controls (left side) -->
+    <div class="controls player1-controls">
+        <div class="direction-button" id="up1">↑</div>
+        <div class="horizontal">
+            <div class="direction-button" id="left1">←</div>
+            <div class="direction-button" id="right1">→</div>
+        </div>
+        <div class="direction-button" id="down1">↓</div>
+    </div>
+
+    <!-- Player 2 Controls (right side) -->
+    <div class="controls player2-controls">
+        <div class="direction-button" id="up2">↑</div>
+        <div class="horizontal">
+            <div class="direction-button" id="left2">←</div>
+            <div class="direction-button" id="right2">→</div>
+        </div>
+        <div class="direction-button" id="down2">↓</div>
+    </div>
+
+    <script>
+        const width = 400;
+        const height = 400;
+        const gridSize = 20;
+        const gridWidth = width / gridSize;
+        const gridHeight = height / gridSize;
+
+        let snake1 = [
+            {x: 8, y: 8},
+            {x: 7, y: 8},
+            {x: 6, y: 8}
+        ];
+
+        let snake2 = [
+            {x: 10, y: 10},
+            {x: 11, y: 10},
+            {x: 12, y: 10}
+        ];
+
+        let direction1 = 'RIGHT'; // Player 1 direction
+        let direction2 = 'LEFT'; // Player 2 direction
+        let food = {x: 5, y: 5};
+        let score1 = 0;
+        let score2 = 0;
+        let gameInterval;
+        const gameSpeed = 150;
+
+        // Create the SVG grid
+        const svg = d3.select('#game');
+        const grid = svg.selectAll('.grid')
+            .data(d3.range(gridWidth * gridHeight))
+            .enter()
+            .append('rect')
+            .attr('x', (d) => (d % gridWidth) * gridSize)
+            .attr('y', (d) => Math.floor(d / gridWidth) * gridSize)
+            .attr('width', gridSize)
+            .attr('height', gridSize)
+            .attr('fill', '#333')
+            .attr('stroke', '#222');
+
+        // Draw both snakes
+        const drawSnakes = () => {
+            svg.selectAll('.snake1').remove();
+            svg.selectAll('.snake2').remove();
+
+            svg.selectAll('.snake1')
+                .data(snake1)
+                .enter()
+                .append('rect')
+                .attr('class', 'snake1')
+                .attr('x', d => d.x * gridSize)
+                .attr('y', d => d.y * gridSize)
+                .attr('width', gridSize)
+                .attr('height', gridSize)
+                .attr('fill', 'green');
+
+            svg.selectAll('.snake2')
+                .data(snake2)
+                .enter()
+                .append('rect')
+                .attr('class', 'snake2')
+                .attr('x', d => d.x * gridSize)
+                .attr('y', d => d.y * gridSize)
+                .attr('width', gridSize)
+                .attr('height', gridSize)
+                .attr('fill', 'red');
+        };
+
+        // Draw the food
+        const drawFood = () => {
+            svg.selectAll('.food').remove();
+            svg.append('rect')
+                .attr('class', 'food')
+                .attr('x', food.x * gridSize)
+                .attr('y', food.y * gridSize)
+                .attr('width', gridSize)
+                .attr('height', gridSize)
+                .attr('fill', 'yellow');
+        };
+
+        // Update the snakes' positions
+        const updateSnakes = () => {
+            let head1 = { ...snake1[0] };
+            let head2 = { ...snake2[0] };
+
+            // Player 1 movement
+            if (direction1 === 'UP') head1.y -= 1;
+            if (direction1 === 'DOWN') head1.y += 1;
+            if (direction1 === 'LEFT') head1.x -= 1;
+            if (direction1 === 'RIGHT') head1.x += 1;
+
+            // Player 2 movement
+            if (direction2 === 'UP') head2.y -= 1;
+            if (direction2 === 'DOWN') head2.y += 1;
+            if (direction2 === 'LEFT') head2.x -= 1;
+            if (direction2 === 'RIGHT') head2.x += 1;
+
+            // Check for game over conditions for both players
+            if (
+                head1.x < 0 || head1.x >= gridWidth || 
+                head1.y < 0 || head1.y >= gridHeight || 
+                snake1.some(segment => segment.x === head1.x && segment.y === head1.y) ||
+                snake2.some(segment => segment.x === head1.x && segment.y === head1.y) // Player 1 touches Player 2
+            ) {
+                gameOver(2);
+                return;
+            }
+
+            if (
+                head2.x < 0 || head2.x >= gridWidth || 
+                head2.y < 0 || head2.y >= gridHeight || 
+                snake2.some(segment => segment.x === head2.x && segment.y === head2.y) ||
+                snake1.some(segment => segment.x === head2.x && segment.y === head2.y) // Player 2 touches Player 1
+            ) {
+                gameOver(1);
+                return;
+            }
+
+            // Add new head to each snake
+            snake1.unshift(head1);
+            snake2.unshift(head2);
+
+            // Check if any snake eats the food
+            if (head1.x === food.x && head1.y === food.y) {
+                score1 += 10;
+                document.getElementById('score').textContent = `Player 1: ${score1} | Player 2: ${score2}`;
+                spawnFood();
+            } else {
+                snake1.pop();
+            }
+
+            if (head2.x === food.x && head2.y === food.y) {
+                score2 += 10;
+                document.getElementById('score').textContent = `Player 1: ${score1} | Player 2: ${score2}`;
+                spawnFood();
+            } else {
+                snake2.pop();
+            }
+
+            drawSnakes();
+            drawFood();
+        };
+
+        // Spawn food in a random position
+        const spawnFood = () => {
+            let newFood = { 
+                x: Math.floor(Math.random() * gridWidth),
+                y: Math.floor(Math.random() * gridHeight)
+            };
+
+            // Avoid placing food on the snakes
+            while (
+                snake1.some(segment => segment.x === newFood.x && segment.y === newFood.y) ||
+                snake2.some(segment => segment.x === newFood.x && segment.y === newFood.y)
+            ) {
+                newFood = { 
+                    x: Math.floor(Math.random() * gridWidth),
+                    y: Math.floor(Math.random() * gridHeight)
+                };
+            }
+
+            food = newFood;
+        };
+
+        // Handle input for player controls
+        const changeDirection = (player, newDirection) => {
+            if (player === 1) {
+                if (newDirection === 'UP' && direction1 !== 'DOWN') direction1 = 'UP';
+                if (newDirection === 'DOWN' && direction1 !== 'UP') direction1 = 'DOWN';
+                if (newDirection === 'LEFT' && direction1 !== 'RIGHT') direction1 = 'LEFT';
+                if (newDirection === 'RIGHT' && direction1 !== 'LEFT') direction1 = 'RIGHT';
+            }
+            if (player === 2) {
+                if (newDirection === 'UP' && direction2 !== 'DOWN') direction2 = 'UP';
+                if (newDirection === 'DOWN' && direction2 !== 'UP') direction2 = 'DOWN';
+                if (newDirection === 'LEFT' && direction2 !== 'RIGHT') direction2 = 'LEFT';
+                if (newDirection === 'RIGHT' && direction2 !== 'LEFT') direction2 = 'RIGHT';
+            }
+        };
+
+        // Game over logic
+        const gameOver = (player) => {
+            clearInterval(gameInterval);
+            alert(`Player ${player} loses! Game Over!`);
+            startGame(); // Restart the game after game over
+        };
+
+        // Set up control buttons for player 1
+        document.getElementById('up1').addEventListener('click', () => changeDirection(1, 'UP'));
+        document.getElementById('down1').addEventListener('click', () => changeDirection(1, 'DOWN'));
+        document.getElementById('left1').addEventListener('click', () => changeDirection(1, 'LEFT'));
+        document.getElementById('right1').addEventListener('click', () => changeDirection(1, 'RIGHT'));
+
+        // Set up control buttons for player 2
+        document.getElementById('up2').addEventListener('click', () => changeDirection(2, 'UP'));
+        document.getElementById('down2').addEventListener('click', () => changeDirection(2, 'DOWN'));
+        document.getElementById('left2').addEventListener('click', () => changeDirection(2, 'LEFT'));
+        document.getElementById('right2').addEventListener('click', () => changeDirection(2, 'RIGHT'));
+
+        // Initialize the game
+        const startGame = () => {
+            snake1 = [
+                {x: 8, y: 8},
+                {x: 7, y: 8},
+                {x: 6, y: 8}
+            ];
+            snake2 = [
+                {x: 10, y: 10},
+                {x: 11, y: 10},
+                {x: 12, y: 10}
+            ];
+            direction1 = 'RIGHT';
+            direction2 = 'LEFT';
+            score1 = 0;
+            score2 = 0;
+            spawnFood();
+            drawSnakes();
+            drawFood();
+            gameInterval = setInterval(updateSnakes, gameSpeed);
+        };
+
+        startGame();
+    </script>
+
+</body>
+</html>
