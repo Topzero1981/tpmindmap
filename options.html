@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enhanced SPX Options Calculator</title>
+  <!-- Ensure responsiveness on mobile devices -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+    }
+    .container {
+      margin-bottom: 20px;
+    }
+    label {
+      margin-right: 10px;
+    }
+    input, button {
+      margin: 5px 0;
+      padding: 5px;
+      font-size: 1em;
+    }
+    button {
+      cursor: pointer;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 10px;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      display: block;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px 12px;
+      text-align: right;
+      font-size: 0.9em;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .error {
+      color: red;
+    }
+    /* For responsiveness on small screens */
+    @media (max-width: 480px) {
+      th, td { font-size: 0.8em; padding: 6px 8px; }
+      input, button { font-size: 0.9em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Enhanced SPX Options Calculator</h1>
+  <div class="container">
+    <!-- Option Type -->
+    <div>
+      <label>Option Type:</label>
+      <input type="radio" id="call" name="optionType" value="call" checked>
+      <label for="call">Call</label>
+      <input type="radio" id="put" name="optionType" value="put">
+      <label for="put">Put</label>
+    </div>
+    <!-- Underlying and Strike -->
+    <div>
+      <label for="S">Underlying Price (S):</label>
+      <input type="number" id="S" value="4000" step="any">
+    </div>
+    <div>
+      <label for="K">Strike Price (K):</label>
+      <input type="number" id="K" value="4000" step="any">
+    </div>
+    <!-- Expiry Date (via calendar) -->
+    <div>
+      <label for="expiry">Expiry Date:</label>
+      <input type="date" id="expiry">
+    </div>
+    <!-- Valuation Date -->
+    <div>
+      <label for="valuation">Valuation Date:</label>
+      <input type="date" id="valuation">
+    </div>
+    <!-- Other parameters -->
+    <div>
+      <label for="r">Risk-free Rate (r):</label>
+      <input type="number" id="r" value="0.01" step="any">
+    </div>
+    <div>
+      <label for="q">Dividend Yield (q):</label>
+      <input type="number" id="q" value="0.0" step="any">
+    </div>
+    <div>
+      <label for="sigma">Volatility (σ):</label>
+      <input type="number" id="sigma" value="0.20" step="any">
+    </div>
+    <div>
+      <button id="calculateBtn">Calculate</button>
+    </div>
+  </div>
+
+  <!-- Divs for output -->
+  <div id="result"></div>
+  <div id="matrixUnderlying"></div>
+  <div id="matrixTime"></div>
+  <div id="combinedMatrices"></div>
+
+  <script>
+    // --- Utility Functions ---
+    // Error function approximation (Abramowitz and Stegun)
+    function erf(x) {
+      var sign = (x >= 0) ? 1 : -1;
+      x = Math.abs(x);
+      var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+      var a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+      var t = 1.0/(1.0 + p*x);
+      var y = 1.0 - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t*Math.exp(-x*x);
+      return sign * y;
+    }
+    // Standard Normal CDF
+    function normCDF(x) {
+      return 0.5 * (1 + erf(x / Math.sqrt(2)));
+    }
+    // Standard Normal PDF
+    function normPDF(x) {
+      return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+    }
+
+    // --- Black–Scholes Calculator ---
+    // Returns an object with option price and Greeks.
+    function calculateOption(S, K, T, r, q, sigma, type) {
+      var d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+      var d2 = d1 - sigma * Math.sqrt(T);
+      var price, delta, theta, rho;
+
+      if (type === "call") {
+        price = S * Math.exp(-q * T) * normCDF(d1) - K * Math.exp(-r * T) * normCDF(d2);
+        delta = Math.exp(-q * T) * normCDF(d1);
+        theta = - (S * sigma * Math.exp(-q * T) * normPDF(d1)) / (2 * Math.sqrt(T))
+                - r * K * Math.exp(-r * T) * normCDF(d2)
+                + q * S * Math.exp(-q * T) * normCDF(d1);
+        rho = K * T * Math.exp(-r * T) * normCDF(d2);
+      } else {
+        price = K * Math.exp(-r * T) * normCDF(-d2) - S * Math.exp(-q * T) * normCDF(-d1);
+        delta = -Math.exp(-q * T) * normCDF(-d1);
+        theta = - (S * sigma * Math.exp(-q * T) * normPDF(d1)) / (2 * Math.sqrt(T))
+                + r * K * Math.exp(-r * T) * normCDF(-d2)
+                - q * S * Math.exp(-q * T) * normCDF(-d1);
+        rho = -K * T * Math.exp(-r * T) * normCDF(-d2);
+      }
+      
+      // Gamma and Vega are the same for calls and puts.
+      var gamma = Math.exp(-q * T) * normPDF(d1) / (S * sigma * Math.sqrt(T));
+      var vega = S * Math.exp(-q * T) * normPDF(d1) * Math.sqrt(T);
+      
+      return {
+        price: price,
+        delta: delta,
+        gamma: gamma,
+        vega: vega,
+        theta: theta,      // Annual theta
+        rho: rho
+      };
+    }
+
+    // --- Helper Function to Express a Metric as a % of the Underlying ---
+    // (Price: (price/S)*100, Delta: delta*100, Gamma: gamma*S, Vega: vega/S, Theta (daily): ((theta/365)/S)*100, Rho: rho/S)
+    function getMetricPct(calc, metric, S_used) {
+      switch(metric) {
+        case "Price":
+          return (calc.price / S_used) * 100;
+        case "Delta":
+          return calc.delta * 100;
+        case "Gamma":
+          return calc.gamma * S_used;
+        case "Vega":
+          return calc.vega / S_used;
+        case "Theta":
+          // Using daily theta
+          return ((calc.theta / 365) / S_used) * 100;
+        case "Rho":
+          return calc.rho / S_used;
+        default:
+          return 0;
+      }
+    }
+
+    // --- Combined Matrix Function for a Given Metric ---
+    // This function builds and returns the HTML for a table that shows how the selected metric (expressed as % of the underlying)
+    // varies with both underlying moves and time decay.
+    function updateCombinedMatrixForMetric(metric, originalS, K, baseDays, r, q, sigma, type) {
+      var multipliers = [0.90, 0.95, 1.0, 1.05, 1.10];
+      var daysArray = [];
+      if (baseDays > 1) {
+        daysArray.push(Math.round(baseDays));
+        daysArray.push(Math.round(baseDays * 0.75));
+        daysArray.push(Math.round(baseDays * 0.50));
+        daysArray.push(Math.round(baseDays * 0.25));
+        daysArray.push(1);
+      } else {
+        daysArray.push(Math.round(baseDays));
+      }
+      
+      var html = "<h2>Combined Matrix: " + metric + " (as % of underlying)</h2>";
+      html += "<table>";
+      html += "<tr><th>Underlying<br>Multiplier</th>";
+      daysArray.forEach(function(days) {
+        html += "<th>" + days + " days</th>";
+      });
+      html += "</tr>";
+      
+      multipliers.forEach(function(mult) {
+        var newS = originalS * mult;
+        html += "<tr>";
+        html += "<td>" + (mult * 100).toFixed(0) + "%<br>(" + newS.toFixed(2) + ")</td>";
+        daysArray.forEach(function(days) {
+          var T_new = days / 365;
+          var simCalc = calculateOption(newS, K, T_new, r, q, sigma, type);
+          var metricPct = getMetricPct(simCalc, metric, newS);
+          html += "<td>" + metricPct.toFixed(2) + "%</td>";
+        });
+        html += "</tr>";
+      });
+      
+      html += "</table>";
+      return html;
+    }
+
+    // --- Main Calculation Handler ---
+    d3.select("#calculateBtn").on("click", function() {
+      // Clear previous outputs.
+      d3.select("#result").html("");
+      d3.select("#matrixUnderlying").html("");
+      d3.select("#matrixTime").html("");
+      d3.select("#combinedMatrices").html("");
+
+      // Get input values.
+      var type = d3.select('input[name="optionType"]:checked').property("value");
+      var S = +d3.select("#S").property("value");
+      var K = +d3.select("#K").property("value");
+      var expiryStr = d3.select("#expiry").property("value");
+      var valuationStr = d3.select("#valuation").property("value");
+      if (!expiryStr) {
+        d3.select("#result").html("<p class='error'>Please select an expiry date.</p>");
+        return;
+      }
+      if (!valuationStr) {
+        d3.select("#result").html("<p class='error'>Please select a valuation date.</p>");
+        return;
+      }
+      var expiry = new Date(expiryStr);
+      var valuation = new Date(valuationStr);
+      
+      // Calculate time to expiry (years).
+      var diffTime = expiry.getTime() - valuation.getTime();
+      var T = diffTime / (1000 * 3600 * 24 * 365);
+      if (T <= 0) {
+        d3.select("#result").html("<p class='error'>Expiry must be after the valuation date.</p>");
+        return;
+      }
+      
+      var r = +d3.select("#r").property("value");
+      var q = +d3.select("#q").property("value");
+      var sigma = +d3.select("#sigma").property("value");
+      
+      // Calculate the main option metrics.
+      var calc = calculateOption(S, K, T, r, q, sigma, type);
+      
+      // Express values as percentage of the underlying.
+      var pricePct = (calc.price / S) * 100;
+      var deltaPct = calc.delta * 100;
+      var gammaPct = calc.gamma * S;
+      var vegaPct = calc.vega / S;
+      var thetaAnnualPct = (calc.theta / S) * 100;
+      var thetaDaily = calc.theta / 365;
+      var thetaDailyPct = (thetaDaily / S) * 100;
+      var rhoPct = calc.rho / S;
+      
+      // Build the main results table.
+      var outputHTML = "<h2>Calculated Option Metrics</h2>";
+      outputHTML += "<table>";
+      outputHTML += "<tr><th>Metric</th><th>Absolute Value</th><th>% of Underlying (S = " + S.toFixed(2) + ")</th></tr>";
+      outputHTML += "<tr><td>Option Price</td><td>" + calc.price.toFixed(4) + "</td><td>" + pricePct.toFixed(2) + "%</td></tr>";
+      outputHTML += "<tr><td>Delta</td><td>" + calc.delta.toFixed(4) + "</td><td>" + deltaPct.toFixed(2) + "%</td></tr>";
+      outputHTML += "<tr><td>Gamma</td><td>" + calc.gamma.toExponential(4) + "</td><td>" + gammaPct.toFixed(4) + "</td></tr>";
+      outputHTML += "<tr><td>Vega</td><td>" + calc.vega.toFixed(4) + "</td><td>" + vegaPct.toFixed(4) + "</td></tr>";
+      outputHTML += "<tr><td>Theta (Annual)</td><td>" + calc.theta.toFixed(4) + "</td><td>" + thetaAnnualPct.toFixed(4) + "</td></tr>";
+      outputHTML += "<tr><td>Theta (Daily)</td><td>" + thetaDaily.toFixed(4) + "</td><td>" + thetaDailyPct.toFixed(4) + "</td></tr>";
+      outputHTML += "<tr><td>Rho</td><td>" + calc.rho.toFixed(4) + "</td><td>" + rhoPct.toFixed(4) + "</td></tr>";
+      outputHTML += "<tr><td>Time to Expiry (years)</td><td colspan='2'>" + T.toFixed(4) + "</td></tr>";
+      outputHTML += "</table>";
+      d3.select("#result").html(outputHTML);
+      
+      // --- Underlying Moves Matrix ---
+      var multipliers = [0.90, 0.95, 1.0, 1.05, 1.10];
+      var matrixHTML = "<h2>Underlying Moves Matrix</h2>";
+      matrixHTML += "<table>";
+      matrixHTML += "<tr><th>Multiplier</th><th>New S</th><th>Option Price ($)</th><th>Option Price (% of New S)</th></tr>";
+      multipliers.forEach(function(mult) {
+        var newS = S * mult;
+        var newCalc = calculateOption(newS, K, T, r, q, sigma, type);
+        var priceNewPct = (newCalc.price / newS) * 100;
+        matrixHTML += "<tr>";
+        matrixHTML += "<td>" + (mult * 100).toFixed(0) + "%</td>";
+        matrixHTML += "<td>" + newS.toFixed(2) + "</td>";
+        matrixHTML += "<td>" + newCalc.price.toFixed(4) + "</td>";
+        matrixHTML += "<td>" + priceNewPct.toFixed(2) + "%</td>";
+        matrixHTML += "</tr>";
+      });
+      matrixHTML += "</table>";
+      d3.select("#matrixUnderlying").html(matrixHTML);
+      
+      // --- Time Decay Matrix ---
+      var currentDays = diffTime / (1000 * 3600 * 24);
+      var daysArray = [];
+      if (currentDays > 1) {
+        daysArray.push(Math.round(currentDays));
+        daysArray.push(Math.round(currentDays * 0.75));
+        daysArray.push(Math.round(currentDays * 0.50));
+        daysArray.push(Math.round(currentDays * 0.25));
+        daysArray.push(1);
+      } else {
+        daysArray.push(Math.round(currentDays));
+      }
+      
+      var timeHTML = "<h2>Time Decay Matrix</h2>";
+      timeHTML += "<table>";
+      timeHTML += "<tr><th>Days to Expiry</th><th>Option Price ($)</th><th>Option Price (% of S)</th></tr>";
+      daysArray.forEach(function(daysRemaining) {
+        var T_new = daysRemaining / 365;
+        var newCalc = calculateOption(S, K, T_new, r, q, sigma, type);
+        var pricePct_new = (newCalc.price / S) * 100;
+        timeHTML += "<tr>";
+        timeHTML += "<td>" + daysRemaining + "</td>";
+        timeHTML += "<td>" + newCalc.price.toFixed(4) + "</td>";
+        timeHTML += "<td>" + pricePct_new.toFixed(2) + "%</td>";
+        timeHTML += "</tr>";
+      });
+      timeHTML += "</table>";
+      d3.select("#matrixTime").html(timeHTML);
+      
+      // --- Combined Matrices for Each Metric ---
+      var metrics = ["Price", "Delta", "Gamma", "Vega", "Theta", "Rho"];
+      var combinedHTML = "";
+      var baseDays = Math.round(currentDays);
+      metrics.forEach(function(metric) {
+        combinedHTML += updateCombinedMatrixForMetric(metric, S, K, baseDays, r, q, sigma, type);
+      });
+      d3.select("#combinedMatrices").html(combinedHTML);
+    });
+    
+    // --- Set Default Dates on Page Load ---
+    window.onload = function() {
+      var today = new Date();
+      var defaultExpiry = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+      var expMonth = (defaultExpiry.getMonth() + 1).toString().padStart(2, '0');
+      var expDay = defaultExpiry.getDate().toString().padStart(2, '0');
+      var defaultExpiryStr = defaultExpiry.getFullYear() + "-" + expMonth + "-" + expDay;
+      d3.select("#expiry").property("value", defaultExpiryStr);
+      
+      var dayMonth = (today.getMonth() + 1).toString().padStart(2, '0');
+      var dayDate = today.getDate().toString().padStart(2, '0');
+      var todayStr = today.getFullYear() + "-" + dayMonth + "-" + dayDate;
+      d3.select("#valuation").property("value", todayStr);
+    };
+  </script>
+</body>
+</html>
