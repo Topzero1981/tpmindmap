@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TP - Options Portfolio Analyzer</title>
+  <!-- Responsive meta -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- D3.js library -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.5;
+    }
+    h1, h2, h3 {
+      margin-top: 20px;
+    }
+    .container, .portfolioContainer, .analysisContainer {
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+      padding: 10px;
+    }
+    label {
+      margin-right: 10px;
+    }
+    input, button, select {
+      margin: 5px 0;
+      padding: 5px;
+      font-size: 1em;
+    }
+    button {
+      cursor: pointer;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 10px;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px 12px;
+      text-align: right;
+      font-size: 0.9em;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .error { color: red; }
+    .chartContainer {
+      margin-bottom: 40px;
+    }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 5px;
+      font: 12px sans-serif;
+      background: lightsteelblue;
+      border: 0px;
+      border-radius: 8px;
+      pointer-events: none;
+    }
+    @media (max-width: 480px) {
+      th, td { font-size: 0.8em; padding: 6px 8px; }
+      input, button, select { font-size: 0.9em; }
+    }
+  </style>
+</head>
+<body>
+  <h1>TP Options Portfolio Analyzer</h1>
+  
+  <!-- Option Form -->
+  <div class="container">
+    <h2>Add an Option</h2>
+    <form id="optionForm">
+      <div>
+        <label>Option Type:</label>
+        <input type="radio" id="call" name="optionType" value="call" checked>
+        <label for="call">Call</label>
+        <input type="radio" id="put" name="optionType" value="put">
+        <label for="put">Put</label>
+      </div>
+      <!-- New Position field -->
+      <div>
+        <label>Position:</label>
+        <input type="radio" id="long" name="position" value="long" checked>
+        <label for="long">Long</label>
+        <input type="radio" id="short" name="position" value="short">
+        <label for="short">Short</label>
+      </div>
+      <div>
+        <label for="S">Underlying Price (S):</label>
+        <input type="number" id="S" value="4000" step="any">
+      </div>
+      <div>
+        <label for="K">Strike Price (K):</label>
+        <input type="number" id="K" value="4000" step="any">
+      </div>
+      <div>
+        <label for="expiry">Expiry Date:</label>
+        <input type="date" id="expiry">
+      </div>
+      <div>
+        <label for="valuation">Valuation Date:</label>
+        <input type="date" id="valuation">
+      </div>
+      <div>
+        <label for="r">Risk-free Rate (r):</label>
+        <input type="number" id="r" value="0.01" step="any">
+      </div>
+      <div>
+        <label for="q">Dividend Yield (q):</label>
+        <input type="number" id="q" value="0.0" step="any">
+      </div>
+      <div>
+        <label for="sigma">Volatility (σ):</label>
+        <input type="number" id="sigma" value="0.20" step="any">
+      </div>
+      <div>
+        <button type="button" id="addOptionBtn">Add Option</button>
+      </div>
+    </form>
+  </div>
+  
+  <!-- Saved Options Table -->
+  <div class="container">
+    <h2>Current Portfolio Options</h2>
+    <div id="savedOptionsTable"></div>
+    <button type="button" id="clearOptionsBtn">Clear Current Options</button>
+  </div>
+  
+  <!-- Portfolio Manager -->
+  <div class="container">
+    <h2>Portfolio Manager</h2>
+    <div>
+      <label for="portfolioName">Portfolio Name:</label>
+      <input type="text" id="portfolioName">
+    </div>
+    <div>
+      <button type="button" id="savePortfolioBtn">Save Current Portfolio</button>
+      <button type="button" id="loadPortfolioBtn">Load Selected Portfolio</button>
+      <button type="button" id="deletePortfolioBtn">Delete Selected Portfolio</button>
+    </div>
+    <div>
+      <label for="portfolioDropdown">Saved Portfolios:</label>
+      <select id="portfolioDropdown"></select>
+    </div>
+  </div>
+  
+  <!-- Calculation Button -->
+  <div class="container">
+    <button type="button" id="calculatePortfolioBtn">Calculate Portfolio</button>
+  </div>
+  
+  <!-- Analysis Output -->
+  <div class="analysisContainer" id="analysisOutput">
+    <!-- Two sections: Individual Option Analysis and Aggregated Portfolio Analysis -->
+    <h2>Individual Option Analysis</h2>
+    <div id="individualAnalysis"></div>
+    <hr>
+    <h2>Aggregated Portfolio Analysis</h2>
+    <div id="aggregatedAnalysis"></div>
+  </div>
+  
+  <script>
+    /***********************
+     * LOCAL STORAGE & OPTION MANAGEMENT
+     ***********************/
+    const OPTIONS_KEY = "currentOptions";
+    const PORTFOLIO_LIST_KEY = "portfolioList"; // array of portfolio names
+    
+    function loadOptions() {
+      const opts = localStorage.getItem(OPTIONS_KEY);
+      return opts ? JSON.parse(opts) : [];
+    }
+    function saveOptions(options) {
+      localStorage.setItem(OPTIONS_KEY, JSON.stringify(options));
+    }
+    function updateOptionsTable() {
+      const options = loadOptions();
+      let html = "<table><tr><th>#</th><th>Type</th><th>Position</th><th>S</th><th>K</th><th>Expiry</th><th>Valuation</th><th>r</th><th>q</th><th>σ</th><th>Action</th></tr>";
+      options.forEach((opt, i) => {
+        html += `<tr>
+                   <td>${i+1}</td>
+                   <td>${opt.type}</td>
+                   <td>${opt.position}</td>
+                   <td>${opt.S}</td>
+                   <td>${opt.K}</td>
+                   <td>${opt.expiry}</td>
+                   <td>${opt.valuation}</td>
+                   <td>${opt.r}</td>
+                   <td>${opt.q}</td>
+                   <td>${opt.sigma}</td>
+                   <td><button onclick="removeOption(${i})">Remove</button></td>
+                 </tr>`;
+      });
+      html += "</table>";
+      document.getElementById("savedOptionsTable").innerHTML = html;
+      updatePortfolioDropdown();
+    }
+    function removeOption(index) {
+      let options = loadOptions();
+      options.splice(index, 1);
+      saveOptions(options);
+      updateOptionsTable();
+    }
+    function clearOptions() {
+      localStorage.removeItem(OPTIONS_KEY);
+      updateOptionsTable();
+    }
+    document.getElementById("addOptionBtn").addEventListener("click", function() {
+      const type = document.querySelector('input[name="optionType"]:checked').value;
+      const position = document.querySelector('input[name="position"]:checked').value;
+      const S = parseFloat(document.getElementById("S").value);
+      const K = parseFloat(document.getElementById("K").value);
+      const expiry = document.getElementById("expiry").value;
+      const valuation = document.getElementById("valuation").value;
+      const r = parseFloat(document.getElementById("r").value);
+      const q = parseFloat(document.getElementById("q").value);
+      const sigma = parseFloat(document.getElementById("sigma").value);
+      
+      if (!expiry || !valuation) {
+        alert("Please select both expiry and valuation dates.");
+        return;
+      }
+      
+      const option = { type, position, S, K, expiry, valuation, r, q, sigma };
+      let options = loadOptions();
+      options.push(option);
+      saveOptions(options);
+      updateOptionsTable();
+    });
+    document.getElementById("clearOptionsBtn").addEventListener("click", clearOptions);
+    
+    /***********************
+     * PORTFOLIO MANAGEMENT (Save, Load, Delete)
+     ***********************/
+    function loadPortfolioList() {
+      const list = localStorage.getItem(PORTFOLIO_LIST_KEY);
+      return list ? JSON.parse(list) : [];
+    }
+    function savePortfolioList(list) {
+      localStorage.setItem(PORTFOLIO_LIST_KEY, JSON.stringify(list));
+    }
+    function updatePortfolioDropdown() {
+      const list = loadPortfolioList();
+      let html = "";
+      list.forEach(name => {
+        html += `<option value="${name}">${name}</option>`;
+      });
+      document.getElementById("portfolioDropdown").innerHTML = html;
+    }
+    document.getElementById("savePortfolioBtn").addEventListener("click", function() {
+      const name = document.getElementById("portfolioName").value.trim();
+      if (!name) { alert("Enter a portfolio name."); return; }
+      const options = loadOptions();
+      if (options.length === 0) { alert("No options to save."); return; }
+      localStorage.setItem("portfolio_" + name, JSON.stringify(options));
+      let list = loadPortfolioList();
+      if (!list.includes(name)) {
+        list.push(name);
+        savePortfolioList(list);
+      }
+      updatePortfolioDropdown();
+      alert("Portfolio saved.");
+    });
+    document.getElementById("loadPortfolioBtn").addEventListener("click", function() {
+      const dropdown = document.getElementById("portfolioDropdown");
+      const name = dropdown.value;
+      if (!name) { alert("Select a portfolio to load."); return; }
+      const saved = localStorage.getItem("portfolio_" + name);
+      if (saved) {
+        localStorage.setItem(OPTIONS_KEY, saved);
+        updateOptionsTable();
+        alert("Portfolio loaded into current options.");
+      } else {
+        alert("Portfolio not found.");
+      }
+    });
+    document.getElementById("deletePortfolioBtn").addEventListener("click", function() {
+      const dropdown = document.getElementById("portfolioDropdown");
+      const name = dropdown.value;
+      if (!name) { alert("Select a portfolio to delete."); return; }
+      localStorage.removeItem("portfolio_" + name);
+      let list = loadPortfolioList();
+      list = list.filter(n => n !== name);
+      savePortfolioList(list);
+      updatePortfolioDropdown();
+      alert("Portfolio deleted.");
+    });
+    
+    /***********************
+     * BLACK-SCHOLES CALCULATIONS & HELPERS
+     ***********************/
+    // The calculateOption function now accepts an extra parameter "position".
+    function calculateOption(S, K, T, r, q, sigma, type, position) {
+      var d1 = (Math.log(S/K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+      var d2 = d1 - sigma * Math.sqrt(T);
+      var price, delta, theta, rho;
+      if (type === "call") {
+        price = S * Math.exp(-q * T) * normCDF(d1) - K * Math.exp(-r * T) * normCDF(d2);
+        delta = Math.exp(-q * T) * normCDF(d1);
+        theta = - (S * sigma * Math.exp(-q * T) * normPDF(d1)) / (2 * Math.sqrt(T))
+                - r * K * Math.exp(-r * T) * normCDF(d2)
+                + q * S * Math.exp(-q * T) * normCDF(d1);
+        rho = K * T * Math.exp(-r * T) * normCDF(d2);
+      } else {
+        price = K * Math.exp(-r * T) * normCDF(-d2) - S * Math.exp(-q * T) * normCDF(-d1);
+        delta = -Math.exp(-q * T) * normCDF(-d1);
+        theta = - (S * sigma * Math.exp(-q * T) * normPDF(d1)) / (2 * Math.sqrt(T))
+                + r * K * Math.exp(-r * T) * normCDF(-d2)
+                - q * S * Math.exp(-q * T) * normCDF(-d1);
+        rho = -K * T * Math.exp(-r * T) * normCDF(-d2);
+      }
+      var gamma = Math.exp(-q * T) * normPDF(d1) / (S * sigma * Math.sqrt(T));
+      var vega = S * Math.exp(-q * T) * normPDF(d1) * Math.sqrt(T);
+      
+      // If the option is short, multiply all outputs by -1.
+      var factor = (position && position.toLowerCase() === "short") ? -1 : 1;
+      return {
+        price: price * factor,
+        delta: delta * factor,
+        gamma: gamma * factor,
+        vega: vega * factor,
+        theta: theta * factor,   // For short, theta reverses sign
+        rho: rho * factor
+      };
+    }
+    function normCDF(x) { return 0.5 * (1 + erf(x/Math.sqrt(2))); }
+    function normPDF(x) { return Math.exp(-0.5*x*x) / Math.sqrt(2*Math.PI); }
+    function erf(x) {
+      var sign = (x >= 0) ? 1 : -1;
+      x = Math.abs(x);
+      var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
+      var a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+      var t = 1.0/(1.0+p*x);
+      var y = 1.0 - ((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+      return sign*y;
+    }
+    function getMetricPct(calc, metric, S_used) {
+      switch(metric) {
+        case "Price": return (calc.price/S_used)*100;
+        case "Delta": return calc.delta*100;
+        case "Gamma": return calc.gamma*S_used;
+        case "Vega": return calc.vega/S_used;
+        case "Theta": return ((calc.theta/365)/S_used)*100;
+        case "Rho": return calc.rho/S_used;
+        default: return 0;
+      }
+    }
+    function getAbsolute(calc, metric) {
+      switch(metric) {
+        case "Price": return calc.price;
+        case "Delta": return calc.delta;
+        case "Gamma": return calc.gamma;
+        case "Vega": return calc.vega;
+        case "Theta": return calc.theta/365;
+        case "Rho": return calc.rho;
+        default: return 0;
+      }
+    }
+    function convertAbsoluteToPercentage(absVal, metric, S_used) {
+      switch(metric) {
+        case "Price": return (absVal/S_used)*100;
+        case "Delta": return absVal*100;
+        case "Gamma": return absVal*S_used;
+        case "Vega": return absVal/S_used;
+        case "Theta": return (absVal/S_used)*100;
+        case "Rho": return absVal/S_used;
+        default: return 0;
+      }
+    }
+    
+    /***********************
+     * SIMULATION HELPERS
+     ***********************/
+    const multipliers = [0.90, 0.95, 1.0, 1.05, 1.10];
+    function computeDaysArrayForOption(opt) {
+      let expiryDate = new Date(opt.expiry);
+      let valuationDate = new Date(opt.valuation);
+      let diffDays = (expiryDate - valuationDate) / (1000 * 3600 * 24);
+      diffDays = Math.max(diffDays, 1);
+      return [Math.round(diffDays), Math.round(diffDays * 0.75), Math.round(diffDays * 0.50), Math.round(diffDays * 0.25), 1];
+    }
+    function computeDaysArrayForPortfolio(options) {
+      if (options.length === 0) return [];
+      return computeDaysArrayForOption(options[0]);
+    }
+    function getSeriesForOption(metric, opt, daysArray) {
+      let series = [];
+      daysArray.forEach(simDays => {
+        let points = multipliers.map(mult => {
+          let newS = opt.S * mult;
+          let T_new = simDays / 365;
+          let calc = calculateOption(newS, opt.K, T_new, opt.r, opt.q, opt.sigma, opt.type, opt.position);
+          return { multiplier: mult * 100, value: getMetricPct(calc, metric, newS), days: simDays };
+        });
+        series.push({ simDays: simDays, points: points });
+      });
+      return series;
+    }
+    function getAggregatedSeries(metric, options, daysArray) {
+      let series = [];
+      daysArray.forEach(simDays => {
+        let points = multipliers.map(mult => {
+          let aggregatedAbs = 0;
+          let newS_common = options[0].S * mult;
+          options.forEach(opt => {
+            let newS = opt.S * mult;
+            let T_new = simDays / 365;
+            let calc = calculateOption(newS, opt.K, T_new, opt.r, opt.q, opt.sigma, opt.type, opt.position);
+            aggregatedAbs += getAbsolute(calc, metric);
+          });
+          return { multiplier: mult * 100, value: convertAbsoluteToPercentage(aggregatedAbs, metric, newS_common), days: simDays };
+        });
+        series.push({ simDays: simDays, points: points });
+      });
+      return series;
+    }
+    
+    /***********************
+     * CHART RENDERING FUNCTIONS
+     ***********************/
+    function renderOptionChart(metric, opt, daysArray, containerId) {
+      let seriesData = getSeriesForOption(metric, opt, daysArray);
+      let margin = { top: 20, right: 80, bottom: 50, left: 50 },
+          width = 350 - margin.left - margin.right,
+          height = 250 - margin.top - margin.bottom;
+      
+      d3.select(containerId).select("svg").remove();
+      let svg = d3.select(containerId)
+                  .append("svg")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+      let x = d3.scaleLinear().domain([90, 110]).range([0, width]);
+      let allValues = [];
+      seriesData.forEach(ser => ser.points.forEach(p => allValues.push(p.value)));
+      let yMin = d3.min(allValues), yMax = d3.max(allValues);
+      let yPad = (yMax - yMin) * 0.1;
+      yMin -= yPad; yMax += yPad;
+      let y = d3.scaleLinear().domain([yMin, yMax]).range([height, 0]);
+      let color = d3.scaleOrdinal(d3.schemeCategory10);
+      let line = d3.line()
+                    .x(d => x(d.multiplier))
+                    .y(d => y(d.value));
+      svg.append("g")
+         .attr("class", "x axis")
+         .attr("transform", "translate(0," + height + ")")
+         .call(d3.axisBottom(x))
+         .append("text")
+         .attr("x", width / 2)
+         .attr("y", 40)
+         .style("text-anchor", "middle")
+         .text("Underlying Multiplier (%)");
+      svg.append("g")
+         .attr("class", "y axis")
+         .call(d3.axisLeft(y))
+         .append("text")
+         .attr("transform", "rotate(-90)")
+         .attr("x", -height/2)
+         .attr("y", -40)
+         .style("text-anchor", "middle")
+         .text(metric + " (% of underlying)");
+      
+      let tooltip = d3.select("body").select(".tooltip");
+      if (tooltip.empty()) {
+        tooltip = d3.select("body").append("div")
+          .attr("class", "tooltip")
+          .style("opacity", 0);
+      }
+      
+      seriesData.forEach((series, i) => {
+        svg.append("path")
+           .datum(series.points)
+           .attr("fill", "none")
+           .attr("stroke", color(i))
+           .attr("stroke-width", 2)
+           .attr("d", line);
+        svg.selectAll(".dot-" + i)
+           .data(series.points)
+           .enter().append("circle")
+           .attr("class", "dot-" + i)
+           .attr("cx", d => x(d.multiplier))
+           .attr("cy", d => y(d.value))
+           .attr("r", 3)
+           .attr("fill", color(i))
+           .on("mouseover", function(event, d) {
+              tooltip.transition().duration(200).style("opacity", 0.9);
+              tooltip.html("Multiplier: " + d.multiplier.toFixed(0) + "%<br/>" +
+                           metric + ": " + d.value.toFixed(2) + "%<br/>" +
+                           "Days: " + d.days)
+                     .style("left", (event.pageX + 10) + "px")
+                     .style("top", (event.pageY - 28) + "px");
+           })
+           .on("mouseout", function() {
+              tooltip.transition().duration(500).style("opacity", 0);
+           });
+      });
+      
+      let legend = svg.selectAll(".legend")
+                      .data(seriesData)
+                      .enter().append("g")
+                      .attr("class", "legend")
+                      .attr("transform", (d, i) => "translate(0," + i * 20 + ")");
+      legend.append("rect")
+            .attr("x", width + 10)
+            .attr("width", 10)
+            .attr("height", 10)
+            .style("fill", (d, i) => color(i));
+      legend.append("text")
+            .attr("x", width + 25)
+            .attr("y", 5)
+            .attr("dy", ".35em")
+            .text(d => d.simDays + " days");
+    }
+    
+    // Render aggregated (portfolio) chart for a given metric.
+    function renderAggregatedChart(metric, options, daysArray, containerId) {
+      let seriesData = getAggregatedSeries(metric, options, daysArray);
+      let margin = { top: 20, right: 80, bottom: 50, left: 50 },
+          width = 350 - margin.left - margin.right,
+          height = 250 - margin.top - margin.bottom;
+      d3.select(containerId).select("svg").remove();
+      let svg = d3.select(containerId)
+                  .append("svg")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+      let x = d3.scaleLinear().domain([90, 110]).range([0, width]);
+      let allValues = [];
+      seriesData.forEach(ser => ser.points.forEach(p => allValues.push(p.value)));
+      let yMin = d3.min(allValues), yMax = d3.max(allValues);
+      let yPad = (yMax - yMin) * 0.1;
+      yMin -= yPad; yMax += yPad;
+      let y = d3.scaleLinear().domain([yMin, yMax]).range([height, 0]);
+      let color = d3.scaleOrdinal(d3.schemeCategory10);
+      let line = d3.line()
+                    .x(d => x(d.multiplier))
+                    .y(d => y(d.value));
+      svg.append("g")
+         .attr("class", "x axis")
+         .attr("transform", "translate(0," + height + ")")
+         .call(d3.axisBottom(x))
+         .append("text")
+         .attr("x", width / 2)
+         .attr("y", 40)
+         .style("text-anchor", "middle")
+         .text("Underlying Multiplier (%)");
+      svg.append("g")
+         .attr("class", "y axis")
+         .call(d3.axisLeft(y))
+         .append("text")
+         .attr("transform", "rotate(-90)")
+         .attr("x", -height/2)
+         .attr("y", -40)
+         .style("text-anchor", "middle")
+         .text(metric + " (% of underlying)");
+      
+      let tooltip = d3.select("body").select(".tooltip");
+      if (tooltip.empty()) {
+        tooltip = d3.select("body").append("div")
+          .attr("class", "tooltip")
+          .style("opacity", 0);
+      }
+      
+      // Now draw each series in a distinct color (based on simDays)
+      seriesData.forEach((series, i) => {
+        svg.append("path")
+           .datum(series.points)
+           .attr("fill", "none")
+           .attr("stroke", color(i))
+           .attr("stroke-width", 3)
+           .attr("d", line);
+        svg.selectAll(".dotAgg-" + i)
+           .data(series.points)
+           .enter().append("circle")
+           .attr("class", "dotAgg-" + i)
+           .attr("cx", d => x(d.multiplier))
+           .attr("cy", d => y(d.value))
+           .attr("r", 3)
+           .attr("fill", color(i))
+           .on("mouseover", function(event, d) {
+             tooltip.transition().duration(200).style("opacity", 0.9);
+             tooltip.html("Multiplier: " + d.multiplier.toFixed(0) + "%<br/>" +
+                          metric + ": " + d.value.toFixed(2) + "%<br/>" +
+                          "Days: " + d.days)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+           })
+           .on("mouseout", function() {
+             tooltip.transition().duration(500).style("opacity", 0);
+           });
+      });
+      
+      let legend = svg.selectAll(".legend")
+         .data(seriesData)
+         .enter().append("g")
+         .attr("class", "legend")
+         .attr("transform", (d, i) => "translate(0," + i * 20 + ")");
+      legend.append("rect")
+         .attr("x", width + 10)
+         .attr("width", 10)
+         .attr("height", 10)
+         .style("fill", (d, i) => color(i));
+      legend.append("text")
+         .attr("x", width + 25)
+         .attr("y", 5)
+         .attr("dy", ".35em")
+         .style("text-anchor", "start")
+         .text(d => d.points[0].days + " days");
+    }
+    
+    /***********************
+     * TABLE BUILDING FUNCTIONS
+     ***********************/
+    function buildOptionTable(metric, opt, daysArray) {
+      let html = "<h3>Table: " + metric + " (Option Analysis)</h3>";
+      html += "<table><tr><th>Underlying<br>Multiplier</th>";
+      daysArray.forEach(simDays => { html += "<th>" + simDays + " days</th>"; });
+      html += "</tr>";
+      multipliers.forEach(mult => {
+        let newS = opt.S * mult;
+        html += "<tr><td>" + (mult * 100).toFixed(0) + "%<br>(" + newS.toFixed(2) + ")</td>";
+        daysArray.forEach(simDays => {
+          let T_new = simDays / 365;
+          let calc = calculateOption(newS, opt.K, T_new, opt.r, opt.q, opt.sigma, opt.type, opt.position);
+          let val = getMetricPct(calc, metric, newS);
+          html += "<td>" + val.toFixed(2) + "%</td>";
+        });
+        html += "</tr>";
+      });
+      html += "</table>";
+      return html;
+    }
+    function buildAggregatedTable(metric, options, daysArray) {
+      let html = "<h3>Table: " + metric + " (Aggregated Portfolio)</h3>";
+      html += "<table><tr><th>Days</th>";
+      multipliers.forEach(mult => {
+        html += `<th>${(mult * 100).toFixed(0)}%</th>`;
+      });
+      html += "</tr>";
+      daysArray.forEach(simDays => {
+        html += `<tr><td>${simDays} days</td>`;
+        multipliers.forEach(mult => {
+          let newS_common = options[0].S * mult;
+          let aggregatedAbs = 0;
+          options.forEach(opt => {
+            let newS = opt.S * mult;
+            let T_new = simDays / 365;
+            let calc = calculateOption(newS, opt.K, T_new, opt.r, opt.q, opt.sigma, opt.type, opt.position);
+            aggregatedAbs += getAbsolute(calc, metric);
+          });
+          let aggPct = convertAbsoluteToPercentage(aggregatedAbs, metric, newS_common);
+          html += `<td>${aggPct.toFixed(2)}</td>`;
+        });
+        html += "</tr>";
+      });
+      html += "</table>";
+      return html;
+    }
+    
+    /***********************
+     * PORTFOLIO ANALYSIS RENDERING
+     ***********************/
+    function renderIndividualAnalysis(options) {
+      let container = d3.select("#individualAnalysis");
+      container.html("");
+      options.forEach((opt, idx) => {
+        let daysArray = computeDaysArrayForOption(opt);
+        let optDiv = container.append("div").attr("class", "optionAnalysis")
+                              .style("border", "1px solid #aaa")
+                              .style("margin-bottom", "20px")
+                              .style("padding", "10px");
+        optDiv.append("h3").text("Option " + (idx + 1) + " (" + opt.type + ", " + opt.position + ", S=" + opt.S + ", K=" + opt.K + ", Exp=" + opt.expiry + ")");
+        const metrics = ["Price", "Delta", "Gamma", "Vega", "Theta", "Rho"];
+        metrics.forEach(metric => {
+          let metricSafe = metric.replace(/\s/g, "");
+          let chartId = "optChart-" + idx + "-" + metricSafe;
+          optDiv.append("div").attr("id", chartId);
+          renderOptionChart(metric, opt, daysArray, "#" + chartId);
+          optDiv.append("div").html(buildOptionTable(metric, opt, daysArray));
+        });
+      });
+    }
+    function renderAggregatedAnalysis(options) {
+      let container = d3.select("#aggregatedAnalysis");
+      container.html("");
+      let daysArray = computeDaysArrayForPortfolio(options);
+      const metrics = ["Price", "Delta", "Gamma", "Vega", "Theta", "Rho"];
+      metrics.forEach(metric => {
+        let metricSafe = metric.replace(/\s/g, "");
+        let secDiv = container.append("div").attr("class", "aggregatedAnalysis")
+                              .style("border", "1px solid #aaa")
+                              .style("margin-bottom", "20px")
+                              .style("padding", "10px");
+        secDiv.append("h3").text(metric + " Aggregated Portfolio Analysis");
+        let chartId = "aggChart-" + metricSafe;
+        secDiv.append("div").attr("id", chartId);
+        renderAggregatedChart(metric, options, daysArray, "#" + chartId);
+        secDiv.append("div").html(buildAggregatedTable(metric, options, daysArray));
+      });
+    }
+    
+    document.getElementById("calculatePortfolioBtn").addEventListener("click", function() {
+      let options = loadOptions();
+      if (options.length === 0) {
+        alert("No options in the current portfolio!");
+        return;
+      }
+      renderIndividualAnalysis(options);
+      renderAggregatedAnalysis(options);
+    });
+    
+    /***********************
+     * SET DEFAULT DATES ON PAGE LOAD
+     ***********************/
+    window.onload = function() {
+      let today = new Date();
+      let defaultExpiry = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+      let expMonth = (defaultExpiry.getMonth() + 1).toString().padStart(2, '0');
+      let expDay = defaultExpiry.getDate().toString().padStart(2, '0');
+      let defaultExpiryStr = `${defaultExpiry.getFullYear()}-${expMonth}-${expDay}`;
+      document.getElementById("expiry").value = defaultExpiryStr;
+      let dayMonth = (today.getMonth() + 1).toString().padStart(2, '0');
+      let dayDate = today.getDate().toString().padStart(2, '0');
+      let todayStr = `${today.getFullYear()}-${dayMonth}-${dayDate}`;
+      document.getElementById("valuation").value = todayStr;
+      updateOptionsTable();
+      updatePortfolioDropdown();
+    };
+  </script>
+</body>
+</html>
