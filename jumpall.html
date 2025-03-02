@@ -9,18 +9,17 @@
     body {
       margin: 0;
       background: #f0f4f8;
-      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
     }
     h1 {
-      margin: 20px 0;
       color: #333;
+      margin: 20px;
     }
     #controls {
       margin-bottom: 10px;
-      text-align: center;
     }
     select, button {
       padding: 8px;
@@ -31,24 +30,24 @@
     }
     svg {
       background: white;
-      border-radius: 20px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      border-radius: 15px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
-    /* Board holes: drawn as white circles with blue strokes */
-    circle.hole {
+    /* Draw board holes as fixed circles */
+    .hole {
       fill: white;
       stroke: #3498db;
       stroke-width: 3;
     }
-    /* Pegs: drawn on top of the board holes */
-    circle.peg {
+    /* Pegs (drawn atop the holes) */
+    .peg {
       fill: #3498db;
       stroke: white;
       stroke-width: 3;
       cursor: pointer;
       transition: fill 0.2s;
     }
-    circle.peg.dragging {
+    .peg.dragging {
       fill: #e74c3c;
       opacity: 0.8;
     }
@@ -57,124 +56,116 @@
 <body>
   <h1>Jump All But One</h1>
   <div id="controls">
-    <label for="emptySelect">Select starting empty peg:</label>
+    <label for="emptySelect">Select starting empty hole:</label>
     <select id="emptySelect">
-      <option value="0">Hole 0</option>
-      <option value="1">Hole 1</option>
-      <option value="2">Hole 2</option>
-      <option value="3">Hole 3</option>
-      <option value="4">Hole 4</option>
-      <option value="5">Hole 5</option>
-      <option value="6">Hole 6</option>
-      <option value="7">Hole 7</option>
-      <option value="8">Hole 8</option>
-      <option value="9">Hole 9</option>
+      <!-- Options for holes 0 through 14 -->
+      <script>
+        for (let i = 0; i < 15; i++) {
+          document.write('<option value="' + i + '">Hole ' + i + '</option>');
+        }
+      </script>
     </select>
     <button id="resetBtn">Reset Game</button>
   </div>
-  <svg width="360" height="500"></svg>
+  <svg width="400" height="500"></svg>
   <script>
     const svg = d3.select("svg");
 
-    // Define the fixed board holes with indices and positions.
-    // Board layout (triangle):
-    //         0
-    //       1   2
-    //     3   4   5
-    //   6   7   8   9
+    // Define the 15 holes in a 5‑row triangle.
+    // The layout is as follows:
+    //            0
+    //          1   2
+    //        3   4   5
+    //      6   7   8   9
+    //   10  11  12  13  14
     const holes = [
-      { index: 0, x: 180, y: 100 },
-      { index: 1, x: 140, y: 200 },
-      { index: 2, x: 220, y: 200 },
-      { index: 3, x: 100, y: 300 },
-      { index: 4, x: 180, y: 300 },
-      { index: 5, x: 260, y: 300 },
-      { index: 6, x: 60,  y: 400 },
-      { index: 7, x: 140, y: 400 },
-      { index: 8, x: 220, y: 400 },
-      { index: 9, x: 300, y: 400 }
+      { index: 0, x: 200, y: 80 },
+      { index: 1, x: 170, y: 160 },
+      { index: 2, x: 230, y: 160 },
+      { index: 3, x: 140, y: 240 },
+      { index: 4, x: 200, y: 240 },
+      { index: 5, x: 260, y: 240 },
+      { index: 6, x: 110, y: 320 },
+      { index: 7, x: 170, y: 320 },
+      { index: 8, x: 230, y: 320 },
+      { index: 9, x: 290, y: 320 },
+      { index: 10, x: 80,  y: 400 },
+      { index: 11, x: 140, y: 400 },
+      { index: 12, x: 200, y: 400 },
+      { index: 13, x: 260, y: 400 },
+      { index: 14, x: 320, y: 400 }
     ];
 
-    /* Allowed moves: each move is a triple of indices (source, jumped, dest).
-       Moves work in both directions.
-    */
-    const allowedMoves = [
-      { source: 0, jumped: 1, dest: 3 },
-      { source: 0, jumped: 2, dest: 5 },
-      { source: 1, jumped: 3, dest: 6 },
-      { source: 1, jumped: 4, dest: 8 },
-      { source: 2, jumped: 4, dest: 7 },
-      { source: 2, jumped: 5, dest: 9 },
-      { source: 3, jumped: 4, dest: 5 },
-      { source: 6, jumped: 7, dest: 8 },
-      { source: 7, jumped: 8, dest: 9 },
-      // Reverse moves
-      { source: 3, jumped: 1, dest: 0 },
-      { source: 5, jumped: 2, dest: 0 },
-      { source: 6, jumped: 3, dest: 1 },
-      { source: 8, jumped: 4, dest: 1 },
-      { source: 7, jumped: 4, dest: 2 },
-      { source: 9, jumped: 5, dest: 2 },
-      { source: 5, jumped: 4, dest: 3 },
-      { source: 8, jumped: 7, dest: 6 },
-      { source: 9, jumped: 8, dest: 7 }
-    ];
-
-    const pegRadius = 25;
-    let emptyHoleIndex = +document.getElementById("emptySelect").value;  // Default initial empty hole
-
-    // Draw board holes.
+    // Draw the board holes.
     svg.selectAll("circle.hole")
-      .data(holes)
-      .enter()
-      .append("circle")
-      .attr("class", "hole")
-      .attr("cx", d => d.x)
-      .attr("cy", d => d.y)
-      .attr("r", pegRadius);
+       .data(holes)
+       .enter()
+       .append("circle")
+       .attr("class", "hole")
+       .attr("cx", d => d.x)
+       .attr("cy", d => d.y)
+       .attr("r", 25);
 
-    // Pegs are stored separately. Each peg has an id and its current hole index.
+    // Dynamically compute allowed moves.
+    // A move from hole A to hole B is legal if the midpoint between A and B matches another hole.
+    const allowedMoves = [];
+    const tol = 0.001; // tolerance for matching coordinates
+    for (let i = 0; i < holes.length; i++) {
+      for (let j = 0; j < holes.length; j++) {
+        if (i === j) continue;
+        const sx = holes[i].x, sy = holes[i].y;
+        const dx = holes[j].x, dy = holes[j].y;
+        const mx = (sx + dx) / 2;
+        const my = (sy + dy) / 2;
+        const jumpedHole = holes.find(h => Math.abs(h.x - mx) < tol && Math.abs(h.y - my) < tol);
+        if (jumpedHole) {
+          allowedMoves.push({ s: holes[i].index, j: jumpedHole.index, d: holes[j].index });
+        }
+      }
+    }
+    // Uncomment next line to view allowed moves in the console:
+    // console.log("Allowed moves:", allowedMoves);
+
+    // Get starting empty hole from the select option.
+    let emptyHoleIndex = +document.getElementById("emptySelect").value;
     let pegs = [];
+
+    // Initialize pegs: every hole except the empty one gets a peg.
     function initPegs() {
-      // Place a peg in every hole except the chosen empty one.
       pegs = holes
         .filter(h => h.index !== emptyHoleIndex)
-        .map(h => ({ id: h.index, currentHole: h.index }));
+        .map(h => ({ id: h.index, hole: h.index }));
     }
-    initPegs();
 
-    // Create a group for pegs (drawn on top of the board).
+    // Create a group for pegs (displayed on top of board holes).
     const pegGroup = svg.append("g");
 
-    // Update peg positions.
+    // Update peg positions on the board.
     function updatePegs() {
       const selection = pegGroup.selectAll("circle.peg")
         .data(pegs, d => d.id);
       selection.exit().remove();
       selection.transition().duration(200)
-        .attr("cx", d => holes.find(h => h.index === d.currentHole).x)
-        .attr("cy", d => holes.find(h => h.index === d.currentHole).y);
-      selection.enter()
-        .append("circle")
+        .attr("cx", d => holes.find(h => h.index === d.hole).x)
+        .attr("cy", d => holes.find(h => h.index === d.hole).y);
+      selection.enter().append("circle")
         .attr("class", "peg")
-        .attr("r", pegRadius)
-        .attr("cx", d => holes.find(h => h.index === d.currentHole).x)
-        .attr("cy", d => holes.find(h => h.index === d.currentHole).y)
+        .attr("r", 20)
+        .attr("cx", d => holes.find(h => h.index === d.hole).x)
+        .attr("cy", d => holes.find(h => h.index === d.hole).y)
         .call(d3.drag()
           .on("start", pegDragStarted)
           .on("drag", pegDragged)
           .on("end", pegDragEnded)
         );
     }
-    updatePegs();
 
-    // Variables for drag events.
     let draggedPeg = null;
-    let originalHole = null; // source hole index for the dragged peg
+    let originalHole = null;
 
     function pegDragStarted(event, d) {
       draggedPeg = d;
-      originalHole = d.currentHole;
+      originalHole = d.hole;
       d3.select(this).classed("dragging", true);
     }
 
@@ -186,17 +177,14 @@
 
     function pegDragEnded(event, d) {
       d3.select(this).classed("dragging", false);
-
-      // Determine the closest hole to where the peg was dropped.
-      let minDist = Infinity;
+      // Find the closest hole to the drop point.
       let targetHole = null;
-      holes.forEach(hole => {
-        const dx = hole.x - event.x;
-        const dy = hole.y - event.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+      let minDist = Infinity;
+      holes.forEach(h => {
+        const dist = Math.hypot(h.x - event.x, h.y - event.y);
         if (dist < minDist) {
           minDist = dist;
-          targetHole = hole;
+          targetHole = h;
         }
       });
       const snapTolerance = 30;
@@ -204,68 +192,57 @@
         updatePegs();
         return;
       }
-
-      // Ensure the target hole is empty.
-      const isEmpty = !pegs.some(p => p.currentHole === targetHole.index);
-      if (!isEmpty) {
+      // If target hole is not empty, cancel move.
+      if (pegs.some(p => p.hole === targetHole.index)) {
         updatePegs();
         return;
       }
-
-      // Look up a legal move from the original hole to the target hole.
-      const move = allowedMoves.find(m => m.source === originalHole && m.dest === targetHole.index);
+      // Check for a legal move from the original hole to the target hole.
+      const move = allowedMoves.find(m => m.s === originalHole && m.d === targetHole.index);
       if (!move) {
         updatePegs();
         return;
       }
-
-      // Verify the "jumped" hole has a peg.
-      const jumpedPeg = pegs.find(p => p.currentHole === move.jumped);
-      if (!jumpedPeg) {
+      // Verify that the jumped hole actually has a peg.
+      if (!pegs.some(p => p.hole === move.j)) {
         updatePegs();
         return;
       }
-
-      // Legal move: update the dragged peg and remove the jumped peg.
-      draggedPeg.currentHole = targetHole.index;
-      pegs = pegs.filter(p => p.id !== jumpedPeg.id);
+      // Execute the move: update the dragged peg’s hole and remove the jumped peg.
+      draggedPeg.hole = targetHole.index;
+      pegs = pegs.filter(p => p.hole !== move.j);
       updatePegs();
-
       draggedPeg = null;
       originalHole = null;
-      
-      // After a move, check game status.
       checkGameStatus();
     }
 
-    // Check if any legal moves remain.
-    function anyLegalMoves() {
-      return allowedMoves.some(m => {
-        return pegs.some(p => p.currentHole === m.source) &&
-               pegs.some(p => p.currentHole === m.jumped) &&
-               !pegs.some(p => p.currentHole === m.dest);
-      });
-    }
-
-    // Check for win or loss.
+    // Check win/loss conditions.
     function checkGameStatus() {
       if (pegs.length === 1) {
         setTimeout(() => alert("Congratulations, you won!"), 200);
-      } else if (!anyLegalMoves()) {
+      } else if (!allowedMoves.some(m => 
+          pegs.some(p => p.hole === m.s) &&
+          pegs.some(p => p.hole === m.j) &&
+          !pegs.some(p => p.hole === m.d)
+        )) {
         setTimeout(() => alert("Better luck next time!"), 200);
       }
     }
 
-    // Reset game based on the selected starting empty peg.
+    // Reset game using the selected starting empty hole.
     function resetGame() {
       emptyHoleIndex = +document.getElementById("emptySelect").value;
       initPegs();
       updatePegs();
     }
 
-    // Attach event listeners to controls.
     document.getElementById("resetBtn").addEventListener("click", resetGame);
     document.getElementById("emptySelect").addEventListener("change", resetGame);
+
+    // Initialize game.
+    initPegs();
+    updatePegs();
   </script>
 </body>
 </html>
