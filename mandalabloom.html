@@ -52,6 +52,9 @@
       <option value="flower">Flower Bloom</option>
       <option value="pulse">Pulsar Burst</option>
       <option value="fractal">Fractal Web</option>
+      <option value="vines">Spiral Vines</option>
+      <option value="nebula">Nebula Burst</option>
+      <option value="crystal">Crystal Bloom</option>
     </select>
     <br>
     <label for="colorMode">Color Mode:</label>
@@ -71,12 +74,14 @@
       <option value="large">Large</option>
     </select>
     <br>
-    <label for="autoMode">Addictive Mode:</label>
-    <select id="autoMode">
+    <label for="glowMode">Glow:</label>
+    <select id="glowMode">
       <option value="on">On</option>
-      <option value="off" selected>Off</option>
+      <option value="off">Off</option>
+      <option value="random">Random</option>
     </select>
     <br>
+    <button id="toggleAddictiveBtn">Addictive Mode: OFF</button>
     <button id="saveBtn">Save Screenshot</button>
   </div>
   <canvas id="garden"></canvas>
@@ -96,7 +101,8 @@
     const speciesSelector = document.getElementById("species");
     const colorModeSelector = document.getElementById("colorMode");
     const sizeCategorySelector = document.getElementById("sizeCategory");
-    const autoModeSelector = document.getElementById("autoMode");
+    const glowModeSelector = document.getElementById("glowMode");
+    const toggleAddictiveBtn = document.getElementById("toggleAddictiveBtn");
     const saveBtn = document.getElementById("saveBtn");
 
     const palettes = {
@@ -107,12 +113,9 @@
     };
 
     function pickHue(colorMode) {
-      if (colorMode === "random") {
-        return Math.random() * 360;
-      }
+      if (colorMode === "random") return Math.random() * 360;
       const palette = palettes[colorMode];
-      const hue = palette[Math.floor(Math.random() * palette.length)];
-      return hue + Math.random() * 10 - 5;
+      return palette[Math.floor(Math.random() * palette.length)] + Math.random() * 10 - 5;
     }
 
     function getScaleFromCategory(category) {
@@ -120,13 +123,19 @@
         case "small": return 0.3;
         case "medium": return 0.6;
         case "large": return 1.0;
-        case "random":
         default: return 0.3 + Math.random() * 0.7;
       }
     }
 
+    let addictiveMode = false;
+
+    toggleAddictiveBtn.addEventListener("click", () => {
+      addictiveMode = !addictiveMode;
+      toggleAddictiveBtn.textContent = `Addictive Mode: ${addictiveMode ? 'ON' : 'OFF'}`;
+    });
+
     class Mandala {
-      constructor(x, y, species = "classic", colorMode = "random", sizeCategory = "random") {
+      constructor(x, y, species, colorMode, sizeCategory, glowMode) {
         this.x = x;
         this.y = y;
         this.hue = pickHue(colorMode);
@@ -135,16 +144,26 @@
         this.symmetry = Math.floor(6 + Math.random() * 6);
         this.species = species;
         this.scaleFactor = getScaleFromCategory(sizeCategory);
-        this.baseRadius = 80 * this.scaleFactor;
-        this.radius = this.baseRadius;
+        this.maxRadius = 80 * this.scaleFactor;
+        this.radius = 0;
+        this.glow = glowMode === "random" ? Math.random() < 0.5 : glowMode === "on";
         this.time = Math.random() * Math.PI * 2;
         this.pulseSpeed = 0.03 + Math.random() * 0.04;
+        this.pulsating = addictiveMode;
       }
 
       update() {
-        this.time += this.pulseSpeed;
-        this.radius = this.baseRadius + Math.sin(this.time) * (15 * this.scaleFactor);
-        this.opacity = 0.6 + 0.4 * Math.sin(this.time);
+        if (!this.pulsating) {
+          if (this.radius < this.maxRadius) {
+            this.radius += 1;
+            this.opacity = 1 - this.radius / this.maxRadius * 0.5;
+          }
+        } else {
+          this.time += this.pulseSpeed;
+          this.radius = this.maxRadius + Math.sin(this.time) * (15 * this.scaleFactor);
+          this.opacity = 0.5 + 0.5 * Math.sin(this.time);
+        }
+
         this.rotation += 0.002;
       }
 
@@ -159,44 +178,43 @@
 
           switch (this.species) {
             case 'flower':
-              for (let r = 0; r < this.radius; r += 5) {
-                const angle = r * 0.15;
-                const px = r * Math.sin(angle) * Math.cos(angle);
-                const py = r * Math.sin(angle);
-                ctx.lineTo(px, py);
-              }
+              for (let r = 0; r < this.radius; r += 5)
+                ctx.lineTo(r * Math.sin(r * 0.15) * Math.cos(r * 0.15), r * Math.sin(r * 0.15));
               break;
             case 'pulse':
               for (let r = 0; r < this.radius; r += 5) {
-                const angle = r * 0.25;
-                const pulse = Math.sin(r * 0.3) * 10;
-                const px = (r + pulse) * Math.cos(angle);
-                const py = (r + pulse) * Math.sin(angle);
-                ctx.lineTo(px, py);
+                const angle = r * 0.25, pulse = Math.sin(r * 0.3) * 10;
+                ctx.lineTo((r + pulse) * Math.cos(angle), (r + pulse) * Math.sin(angle));
               }
               break;
             case 'fractal':
-              for (let r = 0; r < this.radius; r += 5) {
-                const angle = r * 0.1;
-                const px = r * Math.sin(angle * 2) * Math.cos(angle);
-                const py = r * Math.cos(angle * 3);
-                ctx.lineTo(px, py);
+              for (let r = 0; r < this.radius; r += 5)
+                ctx.lineTo(r * Math.sin(r * 0.2) * Math.cos(r * 0.1), r * Math.cos(r * 0.3));
+              break;
+            case 'vines':
+              for (let r = 0; r < this.radius; r += 3)
+                ctx.lineTo(r * Math.sin(r * 0.2), r * Math.sin(r * 0.3));
+              break;
+            case 'nebula':
+              for (let r = 0; r < this.radius; r += 4)
+                ctx.lineTo(r * Math.sin(r * 0.22), r * Math.cos(r * 0.17));
+              break;
+            case 'crystal':
+              for (let r = 0; r < this.radius; r += 6) {
+                const a = r * 0.2, spike = Math.sin(r * 0.4) * 10;
+                ctx.lineTo((r + spike) * Math.cos(a), (r + spike) * Math.sin(a));
               }
               break;
             case 'classic':
             default:
-              for (let r = 0; r < this.radius; r += 5) {
-                const angle = r * 0.1;
-                const px = r * Math.cos(angle);
-                const py = r * Math.sin(angle);
-                ctx.lineTo(px, py);
-              }
+              for (let r = 0; r < this.radius; r += 5)
+                ctx.lineTo(r * Math.cos(r * 0.1), r * Math.sin(r * 0.1));
           }
 
+          ctx.shadowBlur = this.glow ? 20 : 0;
           ctx.shadowColor = `hsla(${this.hue}, 100%, 70%, ${this.opacity})`;
-          ctx.shadowBlur = 20 + this.scaleFactor * 10;
-          ctx.strokeStyle = `hsla(${this.hue + Math.sin(this.time * 2) * 15}, 70%, 60%, ${this.opacity})`;
-          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = `hsla(${this.hue}, 70%, 60%, ${this.opacity})`;
+          ctx.lineWidth = 1.5;
           ctx.stroke();
         }
 
@@ -210,7 +228,8 @@
       const species = speciesSelector.value;
       const colorMode = colorModeSelector.value;
       const sizeCategory = sizeCategorySelector.value;
-      mandalas.push(new Mandala(e.clientX, e.clientY, species, colorMode, sizeCategory));
+      const glowMode = glowModeSelector.value;
+      mandalas.push(new Mandala(e.clientX, e.clientY, species, colorMode, sizeCategory, glowMode));
     });
 
     saveBtn.addEventListener("click", () => {
@@ -221,21 +240,22 @@
     });
 
     setInterval(() => {
-      if (autoModeSelector.value === "on") {
+      if (addictiveMode) {
         const x = Math.random() * canvas.width;
         const y = Math.random() * canvas.height;
         const species = speciesSelector.value;
         const colorMode = colorModeSelector.value;
         const sizeCategory = sizeCategorySelector.value;
-        mandalas.push(new Mandala(x, y, species, colorMode, sizeCategory));
+        const glowMode = glowModeSelector.value;
+        mandalas.push(new Mandala(x, y, species, colorMode, sizeCategory, glowMode));
       }
     }, 800);
 
     function animate() {
-      ctx.fillStyle = "rgba(27, 27, 47, 0.1)";
+      ctx.fillStyle = "rgba(27, 27, 47, 0.08)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      for (let m of mandalas) {
+      for (const m of mandalas) {
         m.update();
         m.draw(ctx);
       }
