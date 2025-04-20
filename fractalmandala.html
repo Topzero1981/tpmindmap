@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mandala Bloom</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #1b1b2f;
+      font-family: sans-serif;
+    }
+    canvas {
+      display: block;
+      background: radial-gradient(#1b1b2f, #0f0f1a);
+    }
+    #ui {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 8px;
+      color: white;
+      z-index: 10;
+    }
+    #ui label {
+      margin-right: 8px;
+    }
+    #ui select, #ui button {
+      margin-top: 6px;
+      font-size: 14px;
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+    }
+    #ui button {
+      background-color: #444;
+      color: #eee;
+      cursor: pointer;
+    }
+    #ui button:hover {
+      background-color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <label for="species">Species:</label>
+    <select id="species">
+      <option value="classic">Classic Spiral</option>
+      <option value="flower">Flower Bloom</option>
+      <option value="pulse">Pulsar Burst</option>
+      <option value="fractal">Fractal Web</option>
+    </select>
+    <br>
+    <label for="colorMode">Color Mode:</label>
+    <select id="colorMode">
+      <option value="random">Random</option>
+      <option value="sunset">Sunset Palette</option>
+      <option value="forest">Forest Greens</option>
+      <option value="ocean">Ocean Blues</option>
+      <option value="candy">Candy Pastels</option>
+    </select>
+    <br>
+    <button id="saveBtn">Save Screenshot</button>
+  </div>
+  <canvas id="garden"></canvas>
+
+  <script>
+    const canvas = document.getElementById("garden");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    const speciesSelector = document.getElementById("species");
+    const colorModeSelector = document.getElementById("colorMode");
+    const saveBtn = document.getElementById("saveBtn");
+
+    const palettes = {
+      sunset: [10, 25, 35, 45, 60],        // warm reds, oranges
+      forest: [120, 130, 140, 150, 160],   // greens
+      ocean: [180, 190, 200, 210, 220],    // blues
+      candy: [280, 300, 320, 340],         // pastel purples/pinks
+    };
+
+    function pickHue(colorMode) {
+      if (colorMode === "random") {
+        return Math.random() * 360;
+      }
+      const palette = palettes[colorMode];
+      const hue = palette[Math.floor(Math.random() * palette.length)];
+      return hue + Math.random() * 10 - 5; // slight variation
+    }
+
+    class Mandala {
+      constructor(x, y, species = "classic", colorMode = "random") {
+        this.x = x;
+        this.y = y;
+        this.radius = 5;
+        this.maxRadius = 100 + Math.random() * 100;
+        this.hue = pickHue(colorMode);
+        this.opacity = 1;
+        this.rotation = 0;
+        this.symmetry = Math.floor(6 + Math.random() * 6);
+        this.species = species;
+      }
+
+      update() {
+        if (this.radius < this.maxRadius) {
+          this.radius += 0.5;
+          this.opacity -= 0.0015;
+          this.rotation += 0.002;
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        for (let i = 0; i < this.symmetry; i++) {
+          ctx.rotate((Math.PI * 2) / this.symmetry);
+          ctx.beginPath();
+
+          switch (this.species) {
+            case 'flower':
+              for (let r = 0; r < this.radius; r += 5) {
+                const angle = r * 0.15;
+                const px = r * Math.sin(angle) * Math.cos(angle);
+                const py = r * Math.sin(angle);
+                ctx.lineTo(px, py);
+              }
+              break;
+            case 'pulse':
+              for (let r = 0; r < this.radius; r += 5) {
+                const angle = r * 0.25;
+                const pulse = Math.sin(r * 0.3) * 10;
+                const px = (r + pulse) * Math.cos(angle);
+                const py = (r + pulse) * Math.sin(angle);
+                ctx.lineTo(px, py);
+              }
+              break;
+            case 'fractal':
+              for (let r = 0; r < this.radius; r += 5) {
+                const angle = r * 0.1;
+                const px = r * Math.sin(angle * 2) * Math.cos(angle);
+                const py = r * Math.cos(angle * 3);
+                ctx.lineTo(px, py);
+              }
+              break;
+            case 'classic':
+            default:
+              for (let r = 0; r < this.radius; r += 5) {
+                const angle = r * 0.1;
+                const px = r * Math.cos(angle);
+                const py = r * Math.sin(angle);
+                ctx.lineTo(px, py);
+              }
+          }
+
+          ctx.strokeStyle = `hsla(${this.hue}, 70%, 60%, ${this.opacity})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    const mandalas = [];
+
+    canvas.addEventListener("click", (e) => {
+      const species = speciesSelector.value;
+      const colorMode = colorModeSelector.value;
+      mandalas.push(new Mandala(e.clientX, e.clientY, species, colorMode));
+    });
+
+    saveBtn.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "mandala-bloom.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    });
+
+    function animate() {
+      ctx.fillStyle = "rgba(27, 27, 47, 0.1)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let m of mandalas) {
+        m.update();
+        m.draw(ctx);
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
