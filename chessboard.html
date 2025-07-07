@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chessboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      touch-action: none;
+      background: #f0f0f0;
+      display: flex; justify-content: center; align-items: center;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows:    repeat(8, 1fr);
+      width: 90vmin; height: 90vmin;
+      position: relative;
+      box-shadow: 0 0 0 2px #666;
+    }
+    .cell {
+      width: 100%; height: 100%;
+    }
+    .piece {
+      position: absolute;
+      width: 12.5%; height: 12.5%;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 6vmin;
+      touch-action: none;
+      user-select: none;
+      cursor: grab;
+    }
+    .piece:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <div id="board"></div>
+
+  <script>
+  (function(){
+    const board = document.getElementById('board');
+    const pieceSymbols = {
+      'r':'♜','n':'♞','b':'♝','q':'♛','k':'♚','p':'♟',
+      'R':'♖','N':'♘','B':'♗','Q':'♕','K':'♔','P':'♙'
+    };
+
+    // build 8×8 grid
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 8; col++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.style.background = (row + col) % 2 === 0
+          ? '#f0d9b5' : '#b58863';
+        board.appendChild(cell);
+      }
+    }
+
+    // initial positions
+    const startPosition = [
+      ['r','n','b','q','k','b','n','r'],
+      ['p','p','p','p','p','p','p','p'],
+      [],[],[],[],
+      ['P','P','P','P','P','P','P','P'],
+      ['R','N','B','Q','K','B','N','R']
+    ];
+    const pieces = [];
+    startPosition.forEach((rowArr,row) => {
+      rowArr.forEach((pt,col) => {
+        if (pt) pieces.push({ type: pt, col, row });
+      });
+    });
+
+    function renderPieces() {
+      // clear old pieces
+      board.querySelectorAll('.piece').forEach(el => el.remove());
+
+      pieces.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'piece';
+        el.textContent = pieceSymbols[d.type];
+        // place
+        el.style.left = d.col * 12.5 + '%';
+        el.style.top  = d.row * 12.5 + '%';
+
+        let offsetX, offsetY, rect;
+        el.addEventListener('pointerdown', e => {
+          e.preventDefault();
+          el.setPointerCapture(e.pointerId);
+          rect = el.getBoundingClientRect();
+          offsetX = e.clientX - rect.left;
+          offsetY = e.clientY - rect.top;
+          el.addEventListener('pointermove', onPointerMove);
+          el.addEventListener('pointerup',   onPointerUp);
+        });
+
+        function onPointerMove(e) {
+          const br = board.getBoundingClientRect();
+          let x = e.clientX - br.left - offsetX;
+          let y = e.clientY - br.top  - offsetY;
+          x = Math.max(0, Math.min(br.width  - rect.width,  x));
+          y = Math.max(0, Math.min(br.height - rect.height, y));
+          el.style.transform = `translate(${x}px, ${y}px)`;
+        }
+
+        function onPointerUp(e) {
+          el.releasePointerCapture(e.pointerId);
+          el.removeEventListener('pointermove', onPointerMove);
+          el.removeEventListener('pointerup',   onPointerUp);
+          el.style.transform = '';
+
+          const br = board.getBoundingClientRect();
+          const x = e.clientX - br.left;
+          const y = e.clientY - br.top;
+          let newCol = Math.floor(x / (br.width  / 8));
+          let newRow = Math.floor(y / (br.height / 8));
+          newCol = Math.max(0, Math.min(7, newCol));
+          newRow = Math.max(0, Math.min(7, newRow));
+
+          // capture: remove any piece already there
+          for (let i = pieces.length - 1; i >= 0; i--) {
+            const p = pieces[i];
+            if (p.col === newCol && p.row === newRow && p !== d) {
+              pieces.splice(i, 1);
+              break;
+            }
+          }
+
+          // move
+          d.col = newCol;
+          d.row = newRow;
+
+          // promotion: white pawn reaches row 0, black pawn reaches row 7
+          if (d.type === 'P' && d.row === 0) d.type = 'Q';
+          if (d.type === 'p' && d.row === 7) d.type = 'q';
+
+          renderPieces();
+        }
+
+        board.appendChild(el);
+      });
+    }
+
+    renderPieces();
+  })();
+  </script>
+</body>
+</html>
