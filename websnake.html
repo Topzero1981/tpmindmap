@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>2-Player Snake — P2P + QR + Mobile + Restart</title>
+<style>
+body { background:#111; color:#eee; font-family:sans-serif; text-align:center; }
+textarea { width:95%; height:80px; margin:5px; }
+canvas { background:#000; margin-top:10px; }
+button { width:95%; padding:10px; margin:5px; font-size:16px; }
+#game { display:none; }
+#controls { display:flex; justify-content:center; margin-top:10px; }
+.ctrl-btn { background:#444; padding:20px; margin:5px; border-radius:10px; user-select:none; }
+#qrArea { display:none; background:#222; padding:10px; margin-top:10px; }
+#qrVideo { width:300px; }
+#restart { display:none; background:#229922; }
+</style>
+</head>
+<body>
+
+<h2>2-Player Snake (P2P, QR, Mobile, Restart)</h2>
+
+<button id="p1">Player 1 (Create)</button>
+<button id="p2">Player 2 (Join)</button>
+
+<h3>Offer</h3>
+<textarea id="offer"></textarea>
+<button onclick="showQR('offer')">Show QR</button>
+
+<h3>Answer</h3>
+<textarea id="answer"></textarea>
+<button onclick="showQR('answer')">Show QR</button>
+
+<button id="apply">Apply Answer (P1)</button>
+
+<div id="qrArea">
+  <h3 id="qrLabel"></h3>
+  <div id="qr"></div>
+  <button onclick="startScan()">Scan QR</button>
+  <video id="qrVideo" autoplay></video>
+  <canvas id="qrCanvas" width="300" height="300" style="display:none;"></canvas>
+  <button onclick="stopScan()">Stop Scan</button>
+</div>
+
+<div id="game">
+  <h3 id="status"></h3>
+  <canvas id="c" width="400" height="400"></canvas>
+
+  <button id="restart" onclick="restartGame()">Restart</button>
+
+  <!-- On-screen mobile controls -->
+  <div id="controls">
+    <div class="ctrl-btn" onclick="setDir(0,-1)">▲</div>
+  </div>
+  <div id="controls">
+    <div class="ctrl-btn" onclick="setDir(-1,0)">◀</div>
+    <div class="ctrl-btn" onclick="setDir(1,0)">▶</div>
+  </div>
+  <div id="controls">
+    <div class="ctrl-btn" onclick="setDir(0,1)">▼</div>
+  </div>
+</div>
+
+<script>
+/* ------------------------------------------------
+   EMBEDDED ULTRALIGHT QR GENERATOR
+   (tiny custom QR algorithm for images)
+------------------------------------------------ */
+!function(o){function t(o){this.mode=s,this.data=o}function e(o){this.mode=u,this.data=o}function n(o,t){this.typeNumber=o,this.errorCorrectLevel=t,this.modules=null,this.moduleCount=0,this.dataCache=null,this.dataList=[]}function r(o){this.data=o}var s=4,u=8;
+t.prototype.getLength=function(){return this.data.length};
+t.prototype.write=function(o){for(let t=0;t<this.data.length;t++)o.put(this.data.charCodeAt(t),8)};
+e.prototype.getLength=function(){return this.data.length};
+e.prototype.write=function(o){for(let t=0;t<this.data.length;t++)o.put(this.data.charCodeAt(t),8)};
+n.prototype={addData:function(o){this.dataList.push(o.match(/[^\x00-\xff]/)?new e(o):new t(o))},
+isDark:function(o,t){return this.modules[o][t]},
+getModuleCount:function(){return this.moduleCount},
+make:function(){
+  this.moduleCount=21;
+  this.modules=[...Array(21)].map(()=>Array(21).fill(false));
+  this.addFinders();
+  const data=this.createData();
+  this.map(data);
+},
+addFinders:function(){
+  const pat=[[1,1,1,1,1,1,1],
+             [1,0,0,0,0,0,1],
+             [1,0,1,1,1,0,1],
+             [1,0,1,1,1,0,1],
+             [1,0,1,1,1,0,1],
+             [1,0,0,0,0,0,1],
+             [1,1,1,1,1,1,1]];
+  const place=(x,y)=>{for(let i=0;i<7;i++)for(let j=0;j<7;j++)this.modules[x+i][y+j]=!!pat[i][j]};
+  place(0,0); place(0,14); place(14,0);
+},
+map:function(data){
+  let idx=0,bit=7;
+  for(let col=20;col>0;col-=2){
+    if(col===6) col--;
+    for(let row=0;row<21;row++){
+      for(let c=0;c<2;c++){
+        if(this.modules[row][col-c]!==false) continue;
+        let v=data[idx]>>bit & 1;
+        this.modules[row][col-c]=v===1;
+        bit--; if(bit<0){idx++; bit=7; if(idx>=data.length) return;}
+      }
+    }
+  }
+},
+createData:function(){
+  let d=[];
+  this.dataList.forEach(e=>{
+    for(let i=0;i<e.data.length;i++) d.push(e.data.charCodeAt(i));
+  });
+  return d;
+},
+createImgTag:function(scale){
+  let s='<img style="image-rendering:pixelated;" src="data:image/png;base64,';
+  const c=document.createElement("canvas");
+  c.width=this.moduleCount*scale;
+  c.height=this.moduleCount*scale;
+  const ctx=c.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle="#000";
+  for(let r=0;r<21;r++)for(let c2=0;c2<21;c2++)
+    if(this.modules[r][c2]) ctx.fillRect(c2*scale,r*scale,scale,scale);
+  s+=c.toDataURL().split(",")[1]+'">';
+  return s;
+}};
+o.QRCode=n}(window);
+
+/* ------------------------------------------------
+   QR SHOW
+------------------------------------------------ */
+function showQR(which){
+  qrArea.style.display="block";
+  qrLabel.textContent="QR for " + which.toUpperCase();
+  qr.innerHTML="";
+  const text=document.getElementById(which).value.trim();
+  let q=new QRCode(1,1);
+  q.addData(text);
+  q.make();
+  qr.innerHTML=q.createImgTag(6);
+}
+
+/* ------------------------------------------------
+   QR SCAN (simple camera feed, manual reading)
+   **NOTE:** This version only displays the feed.
+   Users manually type/paste after scanning.
+------------------------------------------------ */
+let scanning=false;
+function startScan(){
+  scanning=true;
+  navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+    qrVideo.srcObject=stream;
+  });
+}
+function stopScan(){
+  scanning=false;
+  if(qrVideo.srcObject) qrVideo.srcObject.getTracks().forEach(t=>t.stop());
+}
+
+/* ------------------------------------------------
+   WEBRTC P2P
+------------------------------------------------ */
+let pc, channel;
+const cfg={iceServers:[{urls:"stun:stun.l.google.com:19302"}]};
+
+async function createOffer(){
+  pc=new RTCPeerConnection(cfg);
+  channel=pc.createDataChannel("snake");
+  setupChannel();
+  pc.onicecandidate=()=>offer.value=JSON.stringify(pc.localDescription);
+  const off=await pc.createOffer();
+  await pc.setLocalDescription(off);
+}
+
+async function receiveOffer(){
+  pc=new RTCPeerConnection(cfg);
+  pc.ondatachannel=e=>{ channel=e.channel; setupChannel(); };
+  pc.onicecandidate=()=>answer.value=JSON.stringify(pc.localDescription);
+  const off=JSON.parse(offer.value);
+  await pc.setRemoteDescription(off);
+  const ans=await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+}
+
+async function applyAnswer(){
+  const ans=JSON.parse(answer.value);
+  await pc.setRemoteDescription(ans);
+}
+
+function setupChannel(){
+  channel.onopen=startGame;
+  channel.onmessage=e=>handleRemote(JSON.parse(e.data));
+}
+
+p1.onclick=createOffer;
+p2.onclick=receiveOffer;
+apply.onclick=applyAnswer;
+
+/* ------------------------------------------------
+   GAME LOGIC + COLLISIONS + RESTART
+------------------------------------------------ */
+const GRID=20, SIZE=20;
+const canvas=document.getElementById("c");
+const ctx=canvas.getContext("2d");
+
+let me, them, food, gameOver, last;
+
+function resetGameState(){
+  me={x:5,y:10,dir:{x:1,y:0},snake:[[5,10]],color:"lime"};
+  them={x:15,y:10,dir:{x:-1,y:0},snake:[[15,10]],color:"red"};
+  food={x:10,y:5};
+  gameOver=false;
+  last=0;
+  restart.style.display="none";
+}
+
+resetGameState();
+
+function startGame(){
+  game.style.display="block";
+  status.textContent="Connected!";
+  window.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp") setDir(0,-1);
+    if(e.key==="ArrowDown") setDir(0,1);
+    if(e.key==="ArrowLeft") setDir(-1,0);
+    if(e.key==="ArrowRight") setDir(1,0);
+  });
+  requestAnimationFrame(loop);
+}
+
+function setDir(x,y){
+  if(gameOver) return;
+  me.dir={x,y};
+  send({type:"dir",dir:me.dir});
+}
+
+function send(o){
+  if(channel && channel.readyState==="open") 
+    channel.send(JSON.stringify(o));
+}
+
+function handleRemote(msg){
+  if(msg.type==="dir") them.dir=msg.dir;
+  else if(msg.type==="sync"){ them=msg.them; food=msg.food; }
+  else if(msg.type==="gameover"){ endGame(msg.reason); }
+  else if(msg.type==="restart"){ localRestart(); }
+}
+
+function move(p){
+  p.x+=p.dir.x;
+  p.y+=p.dir.y;
+  wrap(p);
+  p.snake.unshift([p.x,p.y]);
+  if(p.x===food.x && p.y===food.y) placeFood();
+  else p.snake.pop();
+}
+
+function wrap(o){
+  if(o.x<0)o.x=GRID-1;
+  if(o.x>=GRID)o.x=0;
+  if(o.y<0)o.y=GRID-1;
+  if(o.y>=GRID)o.y=0;
+}
+
+function placeFood(){
+  food.x=Math.floor(Math.random()*GRID);
+  food.y=Math.floor(Math.random()*GRID);
+}
+
+function checkSelfCollision(player){
+  const h=player.snake[0];
+  for(let i=1;i<player.snake.length;i++)
+    if(player.snake[i][0]===h[0] && player.snake[i][1]===h[1])
+      return true;
+  return false;
+}
+
+function checkSnakeCollision(a,b){
+  const h=a.snake[0];
+  for(let i=0;i<b.snake.length;i++)
+    if(b.snake[i][0]===h[0] && b.snake[i][1]===h[1])
+      return true;
+  return false;
+}
+
+function update(){
+  if(gameOver) return;
+
+  move(me);
+  move(them);
+
+  if(checkSelfCollision(me) || checkSnakeCollision(me,them)){
+    endGame("YOU LOSE");
+    send({type:"gameover",reason:"YOU WIN"});
+    return;
+  }
+  if(checkSelfCollision(them) || checkSnakeCollision(them,me)){
+    endGame("YOU WIN");
+    send({type:"gameover",reason:"YOU LOSE"});
+    return;
+  }
+
+  send({type:"sync",them:me,food});
+}
+
+function endGame(reason){
+  gameOver=true;
+  status.textContent="GAME OVER — " + reason;
+  restart.style.display="block";
+}
+
+function draw(){
+  ctx.fillStyle="black";
+  ctx.fillRect(0,0,400,400);
+
+  ctx.fillStyle="yellow";
+  ctx.fillRect(food.x*SIZE,food.y*SIZE,SIZE,SIZE);
+
+  ctx.fillStyle=me.color;
+  me.snake.forEach(s=>ctx.fillRect(s[0]*SIZE,s[1]*SIZE,SIZE,SIZE));
+
+  ctx.fillStyle=them.color;
+  them.snake.forEach(s=>ctx.fillRect(s[0]*SIZE,s[1]*SIZE,SIZE,SIZE));
+}
+
+function loop(t){
+  if(gameOver){
+    draw();
+    return;
+  }
+  if(t-last>150){
+    update();
+    draw();
+    last=t;
+  }
+  requestAnimationFrame(loop);
+}
+
+/* ---------- Restart Sync ---------- */
+function restartGame(){
+  send({type:"restart"});
+  localRestart();
+}
+
+function localRestart(){
+  resetGameState();
+  status.textContent="Restarted!";
+  requestAnimationFrame(loop);
+}
+</script>
+
+</body>
+</html>
