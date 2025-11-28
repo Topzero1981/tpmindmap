@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Roll Two Dice</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --card:#0b1220;
+    --accent:#64d3ff;
+    --die-bg:linear-gradient(180deg,#f8fafc,#eef2f7);
+    --size:120px;
+    --pip:#0b1220;
+    --glass: rgba(255,255,255,0.06);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+    background: radial-gradient(1000px 600px at 10% 20%, rgba(100,211,255,0.06), transparent),
+                radial-gradient(800px 500px at 90% 80%, rgba(255,255,255,0.02), transparent),
+                var(--bg);
+    color:#e6eef7;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+  }
+
+  .container{
+    width:min(920px,98%);
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:14px;
+    padding:28px;
+    box-shadow: 0 10px 30px rgba(2,6,23,0.6);
+    display:grid;
+    gap:20px;
+    grid-template-columns: 1fr 300px;
+    align-items:center;
+  }
+
+  header{
+    grid-column:1 / -1;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+  }
+  h1{
+    margin:0;
+    font-size:20px;
+    letter-spacing:0.2px;
+    color:#e9f8ff;
+  }
+  p.lead{
+    margin:0;
+    color:#9fb8c8;
+    font-size:13px;
+  }
+
+  .play-area{
+    display:flex;
+    gap:20px;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .die{
+    width:var(--size);
+    height:var(--size);
+    border-radius:14px;
+    background:var(--die-bg);
+    box-shadow:
+      0 6px 18px rgba(2,6,23,0.45),
+      inset 0 -4px 8px rgba(0,0,0,0.06);
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    grid-template-rows:repeat(3,1fr);
+    gap:6px;
+    padding:10px;
+    cursor:pointer;
+    user-select:none;
+    position:relative;
+    transition:transform 300ms cubic-bezier(.2,.9,.2,1), box-shadow 200ms;
+    --rotate: 0deg;
+    transform: rotate(var(--rotate));
+    will-change:transform;
+    outline: none;
+  }
+
+  .die:focus{
+    box-shadow: 0 10px 30px rgba(100,211,255,0.12), 0 2px 0 rgba(255,255,255,0.02) inset;
+  }
+
+  .die:active{ transform: translateY(2px) scale(0.995); }
+
+  /* pip dot */
+  .pip{
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    background:var(--pip);
+    margin:auto;
+    box-shadow: 0 3px 6px rgba(11,18,32,0.35), inset 0 -2px 2px rgba(255,255,255,0.06);
+  }
+
+  /* hidden grid cell if no pip */
+  .cell { display:flex; align-items:center; justify-content:center; }
+
+  /* small label overlay for accessibility */
+  .face-label{
+    position:absolute;
+    left:8px;
+    top:8px;
+    font-size:11px;
+    color:#083243;
+    background:var(--glass);
+    padding:4px 6px;
+    border-radius:8px;
+    display:inline-block;
+    backdrop-filter: blur(4px);
+  }
+
+  /* roll animation classes */
+  .rolling{
+    animation: roll-anim 700ms cubic-bezier(.2,.9,.2,1);
+  }
+  @keyframes roll-anim{
+    0%{ transform: rotate(0deg) translateY(0) }
+    30%{ transform: rotate(720deg) translateY(-18px) }
+    60%{ transform: rotate(1080deg) translateY(-6px) }
+    100%{ transform: rotate(0deg) translateY(0) }
+  }
+
+  /* controls column */
+  .controls{
+    padding:18px;
+    border-radius:12px;
+    background:rgba(255,255,255,0.02);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    align-items:stretch;
+    height:min-content;
+  }
+
+  .btn{
+    display:inline-flex;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,0.04);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    color:#e6f9ff;
+    font-weight:600;
+    cursor:pointer;
+    transition:transform 120ms ease, box-shadow 150ms;
+  }
+  .btn:active{ transform:translateY(1px) }
+  .btn.primary{
+    background:linear-gradient(180deg, var(--accent), #2ec7ff);
+    color:#07212a;
+    box-shadow: 0 8px 20px rgba(46,199,255,0.16);
+    border:none;
+  }
+
+  .stats{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    padding:8px 10px;
+    border-radius:10px;
+    background:rgba(2,6,23,0.25);
+    color:#cfeefc;
+    font-weight:600;
+  }
+
+  .small{
+    font-size:13px;
+    color:#bcdde7;
+    font-weight:500;
+  }
+
+  .hint{ font-size:12px; color:#89b8ca; }
+
+  footer.note{
+    grid-column:1/-1;
+    font-size:12px;
+    color:#8fb7c8;
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+
+  /* Responsive */
+  @media (max-width:720px){
+    .container{ grid-template-columns: 1fr; }
+    .controls{ order:2 }
+    .play-area{ order:1; padding-bottom:6px; }
+  }
+</style>
+</head>
+<body>
+  <div class="container" role="application" aria-label="Dice roller widget">
+    <header>
+      <div>
+        <h1>Roll Two Dice 🎲</h1>
+        <p class="lead">Click a die to roll it, or roll both at once. Press <strong>Space</strong> to roll both.</p>
+      </div>
+      <div class="hint" aria-hidden="true">Random fair rolls (1–6)</div>
+    </header>
+
+    <div class="play-area" id="playArea">
+      <div tabindex="0" class="die" id="die1" role="button" aria-pressed="false" aria-label="Die one: 1" data-face="1">
+        <span class="face-label" aria-hidden="true">Die 1</span>
+        <!-- 3x3 cells; we'll populate pips with JS -->
+        <div class="cell" data-pos="1"></div>
+        <div class="cell" data-pos="2"></div>
+        <div class="cell" data-pos="3"></div>
+        <div class="cell" data-pos="4"></div>
+        <div class="cell" data-pos="5"></div>
+        <div class="cell" data-pos="6"></div>
+        <div class="cell" data-pos="7"></div>
+        <div class="cell" data-pos="8"></div>
+        <div class="cell" data-pos="9"></div>
+      </div>
+
+      <div tabindex="0" class="die" id="die2" role="button" aria-pressed="false" aria-label="Die two: 1" data-face="1">
+        <span class="face-label" aria-hidden="true">Die 2</span>
+        <div class="cell" data-pos="1"></div>
+        <div class="cell" data-pos="2"></div>
+        <div class="cell" data-pos="3"></div>
+        <div class="cell" data-pos="4"></div>
+        <div class="cell" data-pos="5"></div>
+        <div class="cell" data-pos="6"></div>
+        <div class="cell" data-pos="7"></div>
+        <div class="cell" data-pos="8"></div>
+        <div class="cell" data-pos="9"></div>
+      </div>
+    </div>
+
+    <aside class="controls" aria-label="Controls">
+      <div class="stats" aria-live="polite" id="resultLabel">
+        <div>Total: <span id="total">2</span></div>
+        <div class="small">Die1: <span id="val1">1</span> — Die2: <span id="val2">1</span></div>
+      </div>
+
+      <button class="btn primary" id="rollBoth">Roll Both</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn" id="roll1">Roll Die 1</button>
+        <button class="btn" id="roll2">Roll Die 2</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+        <div class="small">Quick tips:</div>
+        <div class="small">• Click a die to roll only that die.</div>
+        <div class="small">• Press <strong>Space</strong> to roll both.</div>
+      </div>
+    </aside>
+
+    <footer class="note">
+      <div>Accessible, keyboard-friendly dice — styled with CSS grid and animated with JavaScript.</div>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  // Face -> cell positions (1..9 grid left->right top->bottom)
+  const FACE_MAP = {
+    1: [5],
+    2: [1,9],
+    3: [1,5,9],
+    4: [1,3,7,9],
+    5: [1,3,5,7,9],
+    6: [1,3,4,6,7,9]
+  };
+
+  // query elements
+  const die1 = document.getElementById('die1');
+  const die2 = document.getElementById('die2');
+  const val1 = document.getElementById('val1');
+  const val2 = document.getElementById('val2');
+  const total = document.getElementById('total');
+  const resultLabel = document.getElementById('resultLabel');
+
+  function setFace(dieEl, face) {
+    face = Number(face);
+    dieEl.dataset.face = face;
+    dieEl.setAttribute('aria-label', dieEl.id + ': ' + face);
+    // clear cells
+    const cells = Array.from(dieEl.querySelectorAll('.cell'));
+    cells.forEach(c => c.innerHTML = ''); // remove previous pips
+
+    // place pips
+    const positions = FACE_MAP[face] || [];
+    positions.forEach(pos => {
+      const target = dieEl.querySelector('.cell[data-pos="' + pos + '"]');
+      if (target) {
+        const pip = document.createElement('span');
+        pip.className = 'pip';
+        target.appendChild(pip);
+      }
+    });
+
+    // update overlay label (for quick visual) - hidden from screen readers
+    const label = dieEl.querySelector('.face-label');
+    if (label) label.textContent = dieEl.id === 'die1' ? 'Die 1 — ' + face : 'Die 2 — ' + face;
+  }
+
+  // random integer 1..6
+  function rndFace(){ return Math.floor(Math.random()*6)+1; }
+
+  function rollDie(dieEl, animate=true){
+    const face = rndFace();
+    if (animate) {
+      dieEl.classList.remove('rolling'); // restart
+      // random spin direction
+      dieEl.style.setProperty('--rotate', (Math.random() * 30 - 15) + 'deg');
+      // trigger reflow to restart animation
+      void dieEl.offsetWidth;
+      dieEl.classList.add('rolling');
+      // remove after animation
+      setTimeout(()=> dieEl.classList.remove('rolling'), 720);
+    }
+    setFace(dieEl, face);
+    announceResult();
+    return face;
+  }
+
+  function announceResult(){
+    const a = Number(die1.dataset.face || 1);
+    const b = Number(die2.dataset.face || 1);
+    val1.textContent = a;
+    val2.textContent = b;
+    total.textContent = a + b;
+    // update live region text for screen readers
+    resultLabel.setAttribute('aria-live','polite');
+    resultLabel.textContent = 'Total: ' + (a+b) + '. Die 1: ' + a + '. Die 2: ' + b + '.';
+  }
+
+  // wire events
+  die1.addEventListener('click', ()=> rollDie(die1));
+  die2.addEventListener('click', ()=> rollDie(die2));
+  die1.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); rollDie(die1); }
+  });
+  die2.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); rollDie(die2); }
+  });
+
+  document.getElementById('roll1').addEventListener('click', ()=> rollDie(die1));
+  document.getElementById('roll2').addEventListener('click', ()=> rollDie(die2));
+  document.getElementById('rollBoth').addEventListener('click', rollBoth);
+
+  // roll both with small stagger for nicer effect
+  function rollBoth(){
+    // add small randomized delay to each die for natural feel
+    die1.classList.remove('rolling');
+    die2.classList.remove('rolling');
+    setTimeout(()=> rollDie(die1), 0);
+    setTimeout(()=> rollDie(die2), 140);
+  }
+
+  // spacebar to roll both (on body)
+  window.addEventListener('keydown', (e) => {
+    // don't intercept typing in input fields - not present here but keep check
+    if (e.code === 'Space' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+      e.preventDefault();
+      rollBoth();
+    }
+  });
+
+  // initialize to 1 & 1
+  setFace(die1, 1);
+  setFace(die2, 1);
+  announceResult();
+
+  // small visual polish: subtle hover tilt
+  [die1, die2].forEach(d => {
+    d.addEventListener('pointerenter', () => d.style.transform = 'translateY(-6px) rotate(var(--rotate))');
+    d.addEventListener('pointerleave', () => d.style.transform = 'rotate(var(--rotate))');
+  });
+
+})();
+</script>
+</body>
+</html>
