@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abalone - Full Game</title>
+    <style>
+        body {
+            background-color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+            flex-direction: column;
+        }
+
+        /* Status and Score UI */
+        #game-ui {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+
+        .score-box {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 10px;
+            background-color: #1a1a1a;
+            color: #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .score-indicator {
+            width: 15px; height: 15px; border-radius: 50%;
+        }
+        .score-indicator.black { background-color: #444; border: 2px solid #000; }
+        .score-indicator.white { background-color: #fff; border: 2px solid #aaa; }
+
+        #turn-indicator {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #1a1a1a;
+            text-transform: uppercase;
+        }
+
+        #message-board {
+            height: 30px;
+            color: #d32f2f;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+            transition: opacity 0.3s;
+        }
+
+        /* Board Styling */
+        #board-container {
+            background-color: #1a1a1a;
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.5), inset 0 5px 15px rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            position: relative;
+        }
+
+        .row { display: flex; justify-content: center; gap: 6px; }
+
+        .cell {
+            width: 46px; height: 46px;
+            background-color: #2a2a2a;
+            border-radius: 50%;
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.8), 0 2px 2px rgba(255,255,255,0.05);
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; transition: background-color 0.2s;
+        }
+
+        .cell:hover { background-color: #3a3a3a; }
+
+        .marble {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            pointer-events: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .marble.black { background: radial-gradient(circle at 12px 12px, #777, #111 60%, #000); box-shadow: 0 5px 8px rgba(0,0,0,0.8); }
+        .marble.white { background: radial-gradient(circle at 12px 12px, #fff, #d4d4d4 60%, #aaa); box-shadow: 0 5px 8px rgba(0,0,0,0.6); }
+        
+        .marble.selected {
+            transform: scale(1.15) translateY(-3px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.8), 0 0 10px 3px #00ffcc;
+        }
+
+        /* Game Over Overlay */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            border-radius: 30px;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+
+        #game-over-screen h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #1a1a1a;
+            background-color: #00ffcc;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        button:hover { background-color: #00ccaa; transform: scale(1.05); }
+        button:active { transform: scale(0.95); }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">
+        <div class="score-box">
+            <div class="score-indicator black"></div>
+            <span id="score-black">0</span>
+        </div>
+        <div id="turn-indicator">Black's Turn</div>
+        <div class="score-box">
+            <span id="score-white">0</span>
+            <div class="score-indicator white"></div>
+        </div>
+    </div>
+
+    <div id="message-board"></div>
+    
+    <div id="board-container">
+        <div id="board-grid"></div>
+        <div id="game-over-screen">
+            <h2 id="winner-text">Black Wins!</h2>
+            <button onclick="resetGame()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // Game State Variables
+        const initialBoard = [
+            [1, 1, 1, 1, 1],
+           [1, 1, 1, 1, 1, 1],
+          [0, 0, 1, 1, 1, 0, 0],
+         [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0],
+         [0, 0, 0, 0, 0, 0, 0, 0],
+          [0, 0, 2, 2, 2, 0, 0],
+           [2, 2, 2, 2, 2, 2],
+            [2, 2, 2, 2, 2]
+        ];
+
+        let boardState = [];
+        let selection = []; 
+        let activePlayer = 1; // 1 = Black, 2 = White (Black starts Abalone)
+        let scores = { 1: 0, 2: 0 };
+        let isGameOver = false;
+
+        const boardGrid = document.getElementById('board-grid');
+        const messageBoard = document.getElementById('message-board');
+        const turnIndicator = document.getElementById('turn-indicator');
+        const scoreBlackEl = document.getElementById('score-black');
+        const scoreWhiteEl = document.getElementById('score-white');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const winnerText = document.getElementById('winner-text');
+
+        function initGame() {
+            // Deep copy the initial board
+            boardState = initialBoard.map(row => [...row]);
+            selection = [];
+            activePlayer = 1;
+            scores = { 1: 0, 2: 0 };
+            isGameOver = false;
+            gameOverScreen.style.display = 'none';
+            updateUI();
+            renderBoard();
+        }
+
+        function updateUI() {
+            scoreBlackEl.innerText = scores[1];
+            scoreWhiteEl.innerText = scores[2];
+            turnIndicator.innerText = activePlayer === 1 ? "Black's Turn" : "White's Turn";
+            turnIndicator.style.color = activePlayer === 1 ? "#333" : "#888";
+        }
+
+        function showMessage(msg) {
+            messageBoard.innerText = msg;
+            messageBoard.style.opacity = 1;
+            setTimeout(() => { messageBoard.style.opacity = 0; }, 3000);
+        }
+
+        function getNeighbors(r, c) {
+            const neighbors = {};
+            if (r > 0) { 
+                const offset = r <= 4 ? -1 : 0;
+                if (c + offset >= 0) neighbors.TL = {r: r-1, c: c + offset};
+                if (c + offset + 1 < boardState[r-1].length) neighbors.TR = {r: r-1, c: c + offset + 1};
+            }
+            if (r < 8) { 
+                const offset = r >= 4 ? -1 : 0;
+                if (c + offset >= 0) neighbors.BL = {r: r+1, c: c + offset};
+                if (c + offset + 1 < boardState[r+1].length) neighbors.BR = {r: r+1, c: c + offset + 1};
+            }
+            if (c > 0) neighbors.L = {r: r, c: c-1};
+            if (c < boardState[r].length - 1) neighbors.R = {r: r, c: c+1};
+            return neighbors;
+        }
+
+        function getDirection(r1, c1, r2, c2) {
+            const n = getNeighbors(r1, c1);
+            for (let dir in n) {
+                if (n[dir].r === r2 && n[dir].c === c2) return dir;
+            }
+            return null;
+        }
+
+        function getOppositeDir(dir) {
+            const opposites = { 'TL': 'BR', 'TR': 'BL', 'L': 'R', 'R': 'L', 'BL': 'TR', 'BR': 'TL' };
+            return opposites[dir];
+        }
+
+        function renderBoard() {
+            boardGrid.innerHTML = '';
+            boardState.forEach((row, r) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+                row.forEach((val, c) => {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell';
+                    
+                    if (val !== 0) {
+                        const marble = document.createElement('div');
+                        marble.className = `marble ${val === 1 ? 'black' : 'white'}`;
+                        if (selection.some(s => s.r === r && s.c === c)) {
+                            marble.classList.add('selected');
+                        }
+                        cellDiv.appendChild(marble);
+                    }
+
+                    cellDiv.addEventListener('click', () => handleCellClick(r, c, val));
+                    rowDiv.appendChild(cellDiv);
+                });
+                boardGrid.appendChild(rowDiv);
+            });
+        }
+
+        function handleCellClick(r, c, val) {
+            if (isGameOver) return;
+            messageBoard.style.opacity = 0; 
+            
+            const isSelectedIdx = selection.findIndex(s => s.r === r && s.c === c);
+
+            // Deselect
+            if (isSelectedIdx > -1) {
+                selection = [];
+                renderBoard();
+                return;
+            }
+
+            // Select
+            if (val !== 0 && (selection.length === 0 || val === activePlayer)) {
+                if (selection.length === 0) {
+                    if (val !== activePlayer) {
+                        showMessage(`It is ${activePlayer === 1 ? 'Black' : 'White'}'s turn!`);
+                        return;
+                    }
+                    selection.push({r, c, val});
+                } else if (selection.length < 3) {
+                    const adjacentTo = selection.find(s => getDirection(s.r, s.c, r, c) !== null);
+                    if (adjacentTo) {
+                        if (selection.length === 2) {
+                            const axis = getDirection(selection[0].r, selection[0].c, selection[1].r, selection[1].c);
+                            const newDirTo0 = getDirection(selection[0].r, selection[0].c, r, c);
+                            const newDirTo1 = getDirection(selection[1].r, selection[1].c, r, c);
+                            if (newDirTo0 === axis || newDirTo0 === getOppositeDir(axis) || 
+                                newDirTo1 === axis || newDirTo1 === getOppositeDir(axis)) {
+                                selection.push({r, c, val});
+                            } else {
+                                showMessage("Marbles must be in a straight line!");
+                            }
+                        } else {
+                            selection.push({r, c, val});
+                        }
+                    }
+                } else {
+                    showMessage("Rule limits: You can only move up to 3 marbles.");
+                }
+                renderBoard();
+                return;
+            }
+
+            // Attempt Move
+            if (selection.length > 0 && val !== activePlayer) {
+                let moveDir = null;
+                for (let s of selection) {
+                    moveDir = getDirection(s.r, s.c, r, c);
+                    if (moveDir) break;
+                }
+                
+                if (moveDir) {
+                    let moveSuccessful = attemptMove(moveDir);
+                    if (moveSuccessful) {
+                        selection = [];
+                        checkWinCondition();
+                        if (!isGameOver) {
+                            activePlayer = activePlayer === 1 ? 2 : 1; // Swap turns
+                            updateUI();
+                        }
+                        renderBoard();
+                    }
+                } else {
+                    showMessage("Invalid direction.");
+                }
+            }
+        }
+
+        function attemptMove(dir) {
+            let isInline = false;
+            if (selection.length > 1) {
+                const axis = getDirection(selection[0].r, selection[0].c, selection[1].r, selection[1].c);
+                if (dir === axis || dir === getOppositeDir(axis)) isInline = true;
+            } else {
+                isInline = true; 
+            }
+
+            if (isInline) return executeInlineMove(dir);
+            else return executeBroadsideMove(dir);
+        }
+
+        function executeInlineMove(dir) {
+            let front = selection.find(s => {
+                let n = getNeighbors(s.r, s.c)[dir];
+                if (!n) return true; 
+                return !selection.some(sel => sel.r === n.r && sel.c === n.c);
+            });
+
+            if (!front) return false;
+
+            let oppositeDir = getOppositeDir(dir);
+            let sortedSelection = [front];
+            let currentSel = front;
+            
+            while(true) {
+                let prevCoords = getNeighbors(currentSel.r, currentSel.c)[oppositeDir];
+                if (!prevCoords) break;
+                let prevSel = selection.find(s => s.r === prevCoords.r && s.c === prevCoords.c);
+                if (prevSel) {
+                    sortedSelection.unshift(prevSel);
+                    currentSel = prevSel;
+                } else break;
+            }
+            
+            let opponentsToPush = [];
+            let curr = front;
+            let validPush = false;
+
+            while(true) {
+                let nextCoords = getNeighbors(curr.r, curr.c)[dir];
+                if (!nextCoords) {
+                    validPush = true; // Push off board
+                    break;
+                }
+                
+                let nextVal = boardState[nextCoords.r][nextCoords.c];
+                
+                if (nextVal === 0) {
+                    validPush = true; 
+                    break;
+                }
+                if (nextVal === activePlayer) {
+                    validPush = false; 
+                    showMessage("Blocked by your own marble.");
+                    break;
+                }
+                
+                opponentsToPush.push({r: nextCoords.r, c: nextCoords.c, val: nextVal});
+                curr = nextCoords;
+            }
+
+            if (!validPush) return false;
+            if (opponentsToPush.length >= sortedSelection.length) {
+                showMessage("Sumito Rule: You must have more marbles to push.");
+                return false; 
+            }
+
+            // Execute moves
+            for (let i = opponentsToPush.length - 1; i >= 0; i--) {
+                let opp = opponentsToPush[i];
+                let nextCoords = getNeighbors(opp.r, opp.c)[dir];
+                if (nextCoords) {
+                    boardState[nextCoords.r][nextCoords.c] = opp.val;
+                } else {
+                    // Pushed off the board! Add score to active player.
+                    scores[activePlayer]++;
+                }
+            }
+
+            for (let i = sortedSelection.length - 1; i >= 0; i--) {
+                let sel = sortedSelection[i];
+                let nextCoords = getNeighbors(sel.r, sel.c)[dir];
+                boardState[nextCoords.r][nextCoords.c] = sel.val;
+                
+                if (i === 0) boardState[sel.r][sel.c] = 0; 
+            }
+
+            return true;
+        }
+
+        function executeBroadsideMove(dir) {
+            let targets = [];
+            for (let s of selection) {
+                let nextCell = getNeighbors(s.r, s.c)[dir];
+                if (!nextCell || boardState[nextCell.r][nextCell.c] !== 0) {
+                    showMessage("Broadside moves require completely empty target spaces.");
+                    return false; 
+                }
+                targets.push({from: s, to: nextCell});
+            }
+
+            targets.forEach(t => boardState[t.from.r][t.from.c] = 0);
+            targets.forEach(t => boardState[t.to.r][t.to.c] = t.from.val);
+
+            return true;
+        }
+
+        function checkWinCondition() {
+            if (scores[1] >= 6) {
+                triggerGameOver("Black Wins!");
+            } else if (scores[2] >= 6) {
+                triggerGameOver("White Wins!");
+            }
+        }
+
+        function triggerGameOver(message) {
+            isGameOver = true;
+            winnerText.innerText = message;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Initialize on load
+        initGame();
+    </script>
+</body>
+</html>
