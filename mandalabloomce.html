@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>✨ Mandala Bloom ✨</title>
+<style>
+  :root {
+    --sa-top:   env(safe-area-inset-top, 0px);
+    --sa-bot:   env(safe-area-inset-bottom, 0px);
+    --sa-left:  env(safe-area-inset-left, 0px);
+    --sa-right: env(safe-area-inset-right, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
+    background: #07071a;
+    font-family: -apple-system, BlinkMacSystemFont, 'Quicksand', system-ui, sans-serif;
+    color: #fff; user-select: none; -webkit-user-select: none;
+    touch-action: none; overscroll-behavior: none;
+    position: fixed; inset: 0;
+  }
+  canvas { display: block; position: absolute; inset: 0; touch-action: none; }
+
+/* On-screen error reporter so mobile users can see console errors */
+#errBox {
+position: absolute;
+top: calc(var(–sa-top) + 6px);
+left: 50%; transform: translateX(-50%);
+z-index: 999; max-width: calc(100vw - 20px);
+background: rgba(220, 40, 70, 0.95);
+color: #fff; font-family: ui-monospace, Menlo, Consolas, monospace;
+font-size: 11px; padding: 8px 30px 8px 10px;
+border-radius: 8px; display: none; white-space: pre-wrap;
+word-break: break-word; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+#errBox.visible { display: block; }
+#errBox button {
+position: absolute; right: 4px; top: 4px;
+background: rgba(255,255,255,0.2); color: #fff;
+border: none; width: 22px; height: 22px; border-radius: 50%;
+font-size: 14px; cursor: pointer; line-height: 1; padding: 0;
+}
+
+#panel {
+position: absolute;
+top: calc(var(–sa-top) + 10px);
+left: calc(var(–sa-left) + 10px);
+z-index: 10;
+background: rgba(20, 15, 40, 0.84);
+-webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+padding: 14px; border-radius: 20px;
+border: 1px solid rgba(255,255,255,0.15);
+box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+width: 248px; max-width: calc(100vw - 20px);
+max-height: calc(100vh - var(–sa-top) - var(–sa-bot) - 20px);
+overflow-y: auto;
+-webkit-overflow-scrolling: touch;
+font-size: 13px;
+transition: transform 0.35s cubic-bezier(.5,0,.3,1.3), opacity 0.25s ease;
+will-change: transform;
+}
+#panel::-webkit-scrollbar { width: 0; }
+#panel.hidden { transform: translateX(-115%); opacity: 0; pointer-events: none; }
+
+#toggleShow {
+position: absolute;
+top: calc(var(–sa-top) + 10px);
+left: calc(var(–sa-left) + 10px);
+z-index: 11;
+width: 54px; height: 54px; border-radius: 50%;
+background: rgba(20,15,40,0.88); color: #fff;
+border: 1px solid rgba(255,255,255,0.22);
+font-size: 24px; cursor: pointer;
+-webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+display: none; align-items: center; justify-content: center;
+transition: transform .15s ease;
+}
+#toggleShow:active { transform: scale(0.9); }
+#panel.hidden ~ #toggleShow { display: flex; }
+
+#title {
+font-size: 18px; margin: 0 0 12px; text-align: center;
+background: linear-gradient(90deg, #ffb3e6, #c8a3ff, #8fd9ff, #a3ffcf);
+-webkit-background-clip: text; background-clip: text;
+-webkit-text-fill-color: transparent;
+font-weight: 800; letter-spacing: 0.3px;
+filter: drop-shadow(0 0 8px rgba(200, 160, 255, 0.4));
+}
+#hideBtn {
+position: absolute; top: 10px; right: 10px;
+background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+color: rgba(255,255,255,0.85); width: 28px; height: 28px;
+border-radius: 50%; font-size: 14px; cursor: pointer; line-height: 1; padding: 0;
+}
+#hideBtn:active { transform: scale(0.9); }
+
+.row { margin-bottom: 10px; }
+.row label {
+display: block; font-size: 10px; opacity: 0.7;
+text-transform: uppercase; letter-spacing: 1px;
+margin-bottom: 4px; font-weight: 600;
+}
+
+/* Select wrapper with unicode arrow — no SVG data URIs (iOS Safari-safe) */
+.sel {
+position: relative;
+}
+.sel::after {
+content: ‘⌄’;
+position: absolute; right: 12px; top: 48%;
+transform: translateY(-50%);
+pointer-events: none; color: rgba(255,255,255,0.6);
+font-size: 14px; font-weight: bold;
+}
+select {
+width: 100%; background: rgba(255,255,255,0.08);
+color: #fff; border: 1px solid rgba(255,255,255,0.15);
+border-radius: 10px; padding: 9px 28px 9px 10px; font-size: 14px;
+outline: none; cursor: pointer;
+-webkit-appearance: none; -moz-appearance: none; appearance: none;
+}
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+.tbtn, .abtn {
+background: rgba(255,255,255,0.07);
+color: #fff; border: 1px solid rgba(255,255,255,0.12);
+border-radius: 12px; padding: 11px 6px;
+font-size: 12px; cursor: pointer; font-weight: 600;
+transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.3s ease;
+text-align: center; line-height: 1.2;
+min-height: 44px;
+}
+.tbtn:active, .abtn:active { transform: scale(0.94); }
+.tbtn.on {
+background: linear-gradient(135deg, #c875ff, #ff7ec7);
+border-color: transparent;
+box-shadow: 0 0 20px rgba(200, 117, 255, 0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.section-label {
+font-size: 10px; opacity: 0.6; text-transform: uppercase;
+letter-spacing: 1.2px; margin: 12px 0 6px; font-weight: 700;
+}
+
+#counter {
+position: absolute;
+bottom: calc(var(–sa-bot) + 16px);
+right: calc(var(–sa-right) + 16px);
+z-index: 10;
+background: rgba(20,15,40,0.82);
+-webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+padding: 10px 16px; border-radius: 999px;
+border: 1px solid rgba(255,255,255,0.15);
+font-size: 14px; font-weight: 600; pointer-events: none;
+box-shadow: 0 6px 24px rgba(0,0,0,0.3);
+}
+#counter span { color: #ffb3e6; }
+
+#hint {
+position: absolute;
+bottom: calc(var(–sa-bot) + 22px);
+left: 50%;
+transform: translateX(-50%); z-index: 10;
+font-size: 14px; color: rgba(255,255,255,0.7);
+pointer-events: none; text-align: center; font-weight: 500;
+text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+animation: fadeIn 1.2s ease 0.3s both, breathe 3s ease infinite;
+white-space: nowrap;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes breathe { 0%,100% { opacity: 0.55; } 50% { opacity: 0.95; } }
+
+#flash {
+position: absolute; inset: 0; z-index: 20;
+background: #fff; opacity: 0; pointer-events: none;
+transition: opacity 0.3s ease;
+}
+#flash.on { opacity: 0.7; transition: opacity 0.08s ease; }
+
+@media (max-width: 420px) {
+#panel { width: 232px; padding: 12px; }
+#title { font-size: 16px; margin-bottom: 10px; }
+.tbtn, .abtn { font-size: 11px; padding: 10px 4px; }
+select { font-size: 13px; padding: 8px 26px 8px 10px; }
+}
+</style>
+
+</head>
+<body>
+<canvas id="garden"></canvas>
+
+<div id="errBox"><button id="errClose" aria-label="dismiss">×</button><span id="errText"></span></div>
+
+<div id="panel">
+  <button id="hideBtn" title="Hide panel" aria-label="Hide">×</button>
+  <h1 id="title">✨ Mandala Bloom ✨</h1>
+
+  <div class="row">
+    <label>🌸 Shape</label>
+    <div class="sel"><select id="species">
+      <option value="classic">✨ Classic Spiral</option>
+      <option value="flower">🌸 Flower Bloom</option>
+      <option value="pulse">💫 Pulsar Burst</option>
+      <option value="fractal">🕸️ Fractal Web</option>
+      <option value="vines">🌿 Spiral Vines</option>
+      <option value="nebula">🌌 Nebula Burst</option>
+      <option value="crystal">💎 Crystal Bloom</option>
+      <option value="butterfly">🦋 Butterfly</option>
+      <option value="starburst">⭐ Starburst</option>
+      <option value="snowflake">❄️ Snowflake</option>
+      <option value="heart">💖 Heart Petals</option>
+      <option value="jellyfish">🪼 Jellyfish</option>
+    </select></div>
+  </div>
+
+  <div class="row">
+    <label>🎨 Colors</label>
+    <div class="sel"><select id="colorMode">
+      <option value="random">🎲 Random</option>
+      <option value="rainbow">🌈 Rainbow</option>
+      <option value="sunset">🌅 Sunset</option>
+      <option value="forest">🌲 Forest</option>
+      <option value="ocean">🌊 Ocean</option>
+      <option value="candy">🍭 Candy</option>
+      <option value="aurora">🌌 Aurora</option>
+      <option value="unicorn">🦄 Unicorn</option>
+      <option value="galaxy">💜 Galaxy</option>
+      <option value="fire">🔥 Fire</option>
+    </select></div>
+  </div>
+
+  <div class="row">
+    <label>📏 Size</label>
+    <div class="sel"><select id="sizeCategory">
+      <option value="random">🎲 Random</option>
+      <option value="small">Small</option>
+      <option value="medium">Medium</option>
+      <option value="large">Large</option>
+      <option value="huge">Huge!</option>
+    </select></div>
+  </div>
+
+  <div class="section-label">Modes</div>
+  <div class="grid2">
+    <button class="tbtn on" data-toggle="glow">💡 Glow</button>
+    <button class="tbtn on" data-toggle="sound">🎵 Sound</button>
+    <button class="tbtn" data-toggle="kaleido">🔮 Mirror</button>
+    <button class="tbtn" data-toggle="magic">🎪 Surprise</button>
+    <button class="tbtn" data-toggle="addictive">💫 Dreamy</button>
+    <button class="tbtn on" data-toggle="trail">🌠 Trails</button>
+  </div>
+
+  <div class="section-label">Actions</div>
+  <div class="grid3">
+    <button class="abtn" id="undoBtn">↩️ Undo</button>
+    <button class="abtn" id="clearBtn">🗑️ Clear</button>
+    <button class="abtn" id="saveBtn">📸 Save</button>
+  </div>
+</div>
+
+<button id="toggleShow" title="Show panel" aria-label="Show controls">✨</button>
+
+<div id="counter">🌸 <span id="count">0</span></div>
+<div id="hint">tap or drag anywhere to bloom ✨</div>
+<div id="flash"></div>
+
+<script>
+/* ============================================================
+   Error reporter — surfaces console errors on screen for mobile
+   ============================================================ */
+(function () {
+  const box = document.getElementById('errBox');
+  const txt = document.getElementById('errText');
+  const close = document.getElementById('errClose');
+  close.addEventListener('click', () => box.classList.remove('visible'));
+  function show(msg) {
+    txt.textContent = msg;
+    box.classList.add('visible');
+  }
+  window.addEventListener('error', function (e) {
+    const m = e.message || 'error';
+    const src = (e.filename || '').split('/').pop();
+    const loc = (e.lineno ? (':' + e.lineno) : '');
+    show(m + (src ? ' [' + src + loc + ']' : ''));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    let r = e.reason;
+    if (r && r.message) r = r.message;
+    show('promise: ' + (r || 'rejected'));
+  });
+})();
+
+/* ============================================================
+   App
+   ============================================================ */
+(function () {
+'use strict';
+
+const canvas = document.getElementById('garden');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+const isMobile = window.innerWidth < 820 || isTouch;
+const DPR = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2);
+
+let W = 0, H = 0, CX = 0, CY = 0;
+
+const state = {
+  glow: true, sound: true, kaleido: false,
+  magic: false, addictive: false, trail: true
+};
+
+// Tighter caps on mobile so Dreamy doesn't choke the device
+const MAX_MANDALAS     = isMobile ? 30 : 90;
+const MAX_SPARKLES     = isMobile ? 80 : 280;
+const MAX_TRAILS       = isMobile ? 30 : 90;
+const SPARK_PER_BLOOM  = isMobile ? 8 : 16;
+const STAR_COUNT       = isMobile ? 70 : 160;
+const DREAMY_INTERVAL_MS = 1800;
+const SHADOW_BLUR_MANDALA = isMobile ? 8 : 16;
+const USE_SPARKLE_SHADOW  = !isMobile;
+
+const palettes = {
+  sunset:  [10, 25, 35, 45, 60],
+  forest:  [100, 120, 140, 160],
+  ocean:   [180, 195, 210, 225],
+  candy:   [280, 300, 320, 340],
+  aurora:  [160, 180, 200, 270, 300],
+  unicorn: [290, 310, 330, 200, 230],
+  galaxy:  [250, 270, 290, 310, 330],
+  fire:    [0, 15, 30, 45]
+};
+let rainbowPhase = Math.random() * 360;
+function pickHue(mode) {
+  if (mode === 'random') return Math.random() * 360;
+  if (mode === 'rainbow') { rainbowPhase = (rainbowPhase + 27) % 360; return rainbowPhase; }
+  const p = palettes[mode];
+  if (!p) return Math.random() * 360;
+  return p[Math.floor(Math.random() * p.length)] + (Math.random() - 0.5) * 14;
+}
+function scaleFromCat(c) {
+  const m = { small: 0.38, medium: 0.68, large: 1.0, huge: 1.55 };
+  if (m[c]) return m[c];
+  return 0.38 + Math.random() * 1.15;
+}
+
+// ---------- Audio: single oscillator, node cleanup to prevent iOS leaks ----------
+let audioCtx = null, master = null, audioReady = false;
+function ensureAudio() {
+  try {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+      master = audioCtx.createGain();
+      master.gain.value = 0.28;
+      master.connect(audioCtx.destination);
+    }
+    if (audioCtx.state === 'suspended' && audioCtx.resume) {
+      audioCtx.resume().then(() => { audioReady = true; }, () => {});
+    } else {
+      audioReady = true;
+    }
+  } catch (e) { /* no audio */ }
+}
+
+const pentFreqs = [];
+(function () {
+  const base = [261.63, 293.66, 329.63, 392.00, 440.00]; // C D E G A
+  for (let oct = -1; oct <= 2; oct++)
+    for (let k = 0; k < base.length; k++)
+      pentFreqs.push(base[k] * Math.pow(2, oct));
+})();
+
+let lastChimeAt = -1;
+function playChime(hue, scaleFactor) {
+  if (!state.sound || !audioReady || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (now - lastChimeAt < 0.04) return;  // throttle so Dreamy can't flood audio
+  lastChimeAt = now;
+
+  try {
+    const h = (((hue % 360) + 360) % 360) / 360;
+    const idx = Math.floor(h * pentFreqs.length) % pentFreqs.length;
+    const freq = pentFreqs[idx];
+    const dur = 1.8;
+
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+
+    const amp = Math.min(0.22, 0.09 + scaleFactor * 0.08);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(amp, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0005, now + dur);
+
+    osc.connect(gain).connect(master);
+
+    // CRITICAL iOS fix: disconnect after playback so nodes get GC'd
+    osc.onended = function () {
+      try { osc.disconnect(); gain.disconnect(); } catch (_) {}
+    };
+
+    osc.start(now);
+    osc.stop(now + dur);
+  } catch (e) { /* ignore */ }
+}
+
+// ---------- Stars ----------
+const stars = [];
+function initStars() {
+  stars.length = 0;
+  for (let i = 0; i < STAR_COUNT; i++) {
+    stars.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      r: Math.random() * 1.2 + 0.3,
+      tw: Math.random() * Math.PI * 2,
+      twSpeed: 0.008 + Math.random() * 0.03,
+      hue: [200, 220, 250, 280, 320][Math.floor(Math.random() * 5)]
+    });
+  }
+}
+const shootingStars = [];
+
+// ---------- Species path ----------
+function speciesPath(species, radius, armIndex) {
+  const pts = [];
+  const r0 = Math.max(0, radius);
+  if (r0 < 1) return pts;
+
+  switch (species) {
+    case 'flower':
+      for (let r = 0; r < r0; r += 4)
+        pts.push([r * Math.sin(r * 0.15) * Math.cos(r * 0.15), r * Math.sin(r * 0.15)]);
+      break;
+    case 'pulse':
+      for (let r = 0; r < r0; r += 4) {
+        const a = r * 0.25, p = Math.sin(r * 0.3) * 10;
+        pts.push([(r + p) * Math.cos(a), (r + p) * Math.sin(a)]);
+      }
+      break;
+    case 'fractal':
+      for (let r = 0; r < r0; r += 4)
+        pts.push([r * Math.sin(r * 0.2) * Math.cos(r * 0.1), r * Math.cos(r * 0.3)]);
+      break;
+    case 'vines':
+      for (let r = 0; r < r0; r += 3)
+        pts.push([r * Math.sin(r * 0.2), r * Math.sin(r * 0.3)]);
+      break;
+    case 'nebula':
+      for (let r = 0; r < r0; r += 3)
+        pts.push([r * Math.sin(r * 0.22), r * Math.cos(r * 0.17)]);
+      break;
+    case 'crystal':
+      for (let r = 0; r < r0; r += 5) {
+        const a = r * 0.2, s = Math.sin(r * 0.4) * 10;
+        pts.push([(r + s) * Math.cos(a), (r + s) * Math.sin(a)]);
+      }
+      break;
+    case 'butterfly': {
+      const steps = Math.max(30, Math.floor(r0 / 1.5));
+      const k = r0 / 60;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        const x = (16 * Math.pow(Math.sin(t), 3)) * k * 0.9;
+        const y = -(Math.sin(t * 2) * 20 + Math.sin(t) * 6) * k;
+        pts.push([x, y]);
+      }
+      break;
+    }
+    case 'starburst':
+      for (let r = 0; r < r0; r += 2) {
+        const wobble = Math.sin(r * 0.9) * 5;
+        pts.push([wobble, -r]);
+      }
+      break;
+    case 'snowflake': {
+      const step = 3;
+      let branched = 0;
+      for (let r = 0; r <= r0; r += step) {
+        pts.push([0, -r]);
+        if (r > 10 && r < r0 - 4 && (Math.floor(r / step) % 5) === 0 && branched < 4) {
+          const bl = 5 + r * 0.14;
+          pts.push([bl, -r + bl * 0.4]);
+          pts.push([0, -r]);
+          pts.push([-bl, -r + bl * 0.4]);
+          pts.push([0, -r]);
+          branched++;
+        }
+      }
+      break;
+    }
+    case 'heart': {
+      const s = r0 / 18;
+      const steps = 40;
+      for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * Math.PI * 2;
+        const x = 16 * Math.pow(Math.sin(t), 3) * s;
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * s;
+        pts.push([x, y - r0 * 0.5]);
+      }
+      break;
+    }
+    case 'jellyfish':
+      for (let r = 0; r < r0; r += 2) {
+        const sway = Math.sin(r * 0.15 + armIndex * 0.7) * 10;
+        pts.push([sway, -r]);
+      }
+      break;
+    case 'classic':
+    default:
+      for (let r = 0; r < r0; r += 4)
+        pts.push([r * Math.cos(r * 0.1), r * Math.sin(r * 0.1)]);
+  }
+  return pts;
+}
+
+function easeOutBack(t) {
+  t = Math.max(0, Math.min(1, t));
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+// ---------- Mandala ----------
+function Mandala(x, y, species, hue, scale, glow) {
+  this.x = x; this.y = y;
+  this.species = species;
+  this.hue = hue;
+  this.scaleFactor = scale;
+  this.maxRadius = 82 * scale;
+  this.radius = 0;
+  this.symmetry = 6 + Math.floor(Math.random() * 7);
+  this.rotation = Math.random() * Math.PI * 2;
+  this.rotSpeed = (Math.random() - 0.5) * 0.012;
+  this.glow = glow;
+  this.time = Math.random() * Math.PI * 2;
+  this.pulseSpeed = 0.02 + Math.random() * 0.03;
+  this.fadeOut = 0;
+  this.alive = true;
+  this.bloom = 0;
+  this.renderOpacity = 1;
+}
+Mandala.prototype.update = function () {
+  if (this.fadeOut > 0) {
+    this.fadeOut += 0.025;
+    this.rotation += 0.05;
+    if (this.fadeOut >= 1) this.alive = false;
+    return;
+  }
+  if (this.bloom < 1) this.bloom = Math.min(1, this.bloom + 0.04);
+  if (state.addictive) {
+    this.time += this.pulseSpeed;
+    const baseR = this.maxRadius * this.bloom;
+    const pulse = Math.sin(this.time) * 12 * this.scaleFactor;
+    this.radius = Math.max(0, baseR + pulse);
+    this.renderOpacity = 0.6 + 0.4 * Math.abs(Math.sin(this.time));
+  } else {
+    this.radius = Math.max(0, this.maxRadius * easeOutBack(this.bloom));
+    this.renderOpacity = 0.92;
+  }
+  this.rotation += this.rotSpeed;
+};
+Mandala.prototype.draw = function () {
+  const alpha = (1 - this.fadeOut) * this.renderOpacity;
+  if (alpha <= 0.02 || this.radius < 1) return;
+  ctx.save();
+  ctx.translate(this.x, this.y);
+  ctx.rotate(this.rotation);
+  ctx.lineWidth = 1.3 + this.scaleFactor * 0.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const stepAngle = (Math.PI * 2) / this.symmetry;
+  const strokeColor = 'hsla(' + this.hue + ', 78%, 64%, ' + alpha + ')';
+  const glowColor   = 'hsla(' + this.hue + ', 100%, 72%, ' + alpha + ')';
+  for (let i = 0; i < this.symmetry; i++) {
+    ctx.rotate(stepAngle);
+    const pts = speciesPath(this.species, this.radius, i);
+    if (pts.length === 0) continue;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]);
+    if (this.glow) {
+      ctx.shadowBlur = SHADOW_BLUR_MANDALA;
+      ctx.shadowColor = glowColor;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    ctx.strokeStyle = strokeColor;
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+// ---------- Sparkles (simplified — just a glowing dot) ----------
+function Sparkle(x, y, hue) {
+  this.x = x; this.y = y;
+  const speed = 2 + Math.random() * 4.5;
+  const ang = Math.random() * Math.PI * 2;
+  this.vx = Math.cos(ang) * speed;
+  this.vy = Math.sin(ang) * speed - 1;
+  this.life = 1;
+  this.decay = 0.016 + Math.random() * 0.02;
+  this.hue = hue + (Math.random() - 0.5) * 50;
+  this.size = 1.5 + Math.random() * 2;
+}
+Sparkle.prototype.update = function () {
+  this.x += this.vx; this.y += this.vy;
+  this.vx *= 0.97; this.vy *= 0.97;
+  this.vy += 0.08;
+  this.life -= this.decay;
+};
+Sparkle.prototype.draw = function () {
+  if (this.life <= 0) return;
+  const s = this.size * Math.max(0, this.life);
+  const col = 'hsla(' + this.hue + ', 100%, 80%, ' + this.life + ')';
+  ctx.save();
+  if (USE_SPARKLE_SHADOW) {
+    ctx.shadowBlur = 10; ctx.shadowColor = col;
+  }
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(this.x, this.y, s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+};
+
+// ---------- Trails ----------
+function Trail(x, y, hue) {
+  this.x = x; this.y = y; this.hue = hue;
+  this.life = 1;
+  this.size = 3 + Math.random() * 3;
+}
+Trail.prototype.update = function () { this.life -= 0.04; };
+Trail.prototype.draw = function () {
+  if (this.life <= 0) return;
+  const col = 'hsla(' + this.hue + ', 90%, 72%, ' + (this.life * 0.5) + ')';
+  ctx.save();
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+};
+
+// ---------- World ----------
+const mandalas = [];
+const sparkles = [];
+const trails = [];
+
+const speciesSel = document.getElementById('species');
+const colorSel   = document.getElementById('colorMode');
+const sizeSel    = document.getElementById('sizeCategory');
+const countEl    = document.getElementById('count');
+const allSpecies = [];
+const allPalettes = [];
+for (let i = 0; i < speciesSel.options.length; i++) allSpecies.push(speciesSel.options[i].value);
+for (let i = 0; i < colorSel.options.length; i++) allPalettes.push(colorSel.options[i].value);
+const allSizes = ['small', 'medium', 'large', 'huge'];
+
+let mandalaCount = 0;
+let lastAutoBloom = 0;
+
+function bloom(x, y, isMirror) {
+  try {
+    const species = state.magic ? allSpecies[(Math.random() * allSpecies.length) | 0] : speciesSel.value;
+    const colorMode = state.magic ? allPalettes[(Math.random() * allPalettes.length) | 0] : colorSel.value;
+    const sizeCat = state.magic ? allSizes[(Math.random() * allSizes.length) | 0] : sizeSel.value;
+
+    const hue = pickHue(colorMode);
+    const scale = scaleFromCat(sizeCat);
+    mandalas.push(new Mandala(x, y, species, hue, scale, state.glow));
+    while (mandalas.length > MAX_MANDALAS) mandalas.shift();
+
+    const count = SPARK_PER_BLOOM + Math.floor(scale * 6);
+    for (let i = 0; i < count; i++) sparkles.push(new Sparkle(x, y, hue));
+    while (sparkles.length > MAX_SPARKLES) sparkles.shift();
+
+    playChime(hue, scale);
+    mandalaCount++;
+    if (countEl) countEl.textContent = mandalaCount;
+
+    if (!isMirror && state.kaleido) {
+      const dx = x - CX, dy = y - CY;
+      const reflections = 5;
+      for (let i = 1; i < reflections; i++) {
+        const a = (Math.PI * 2 / reflections) * i;
+        const nx = CX + dx * Math.cos(a) - dy * Math.sin(a);
+        const ny = CY + dx * Math.sin(a) + dy * Math.cos(a);
+        bloom(nx, ny, true);
+      }
+    }
+  } catch (e) { /* swallow */ }
+}
+
+// ---------- UI ----------
+const tbtns = document.querySelectorAll('.tbtn');
+for (let i = 0; i < tbtns.length; i++) {
+  const btn = tbtns[i];
+  const key = btn.getAttribute('data-toggle');
+  btn.classList.toggle('on', !!state[key]);
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    state[key] = !state[key];
+    btn.classList.toggle('on', state[key]);
+    if (key === 'sound' && state.sound) ensureAudio();
+    if (key === 'addictive' && state.addictive) lastAutoBloom = performance.now();
+  });
+}
+
+document.getElementById('undoBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  const m = mandalas[mandalas.length - 1];
+  if (m && !m.fadeOut) m.fadeOut = 0.01;
+});
+document.getElementById('clearBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  for (let i = 0; i < mandalas.length; i++) {
+    if (!mandalas[i].fadeOut) mandalas[i].fadeOut = 0.01 + Math.random() * 0.2;
+  }
+});
+document.getElementById('saveBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  const f = document.getElementById('flash');
+  f.classList.add('on');
+  setTimeout(function () { f.classList.remove('on'); }, 120);
+  try {
+    const link = document.createElement('a');
+    link.download = 'mandala-bloom.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (err) { /* ignore */ }
+});
+
+const panel = document.getElementById('panel');
+document.getElementById('hideBtn').addEventListener('click', function (e) {
+  e.stopPropagation();
+  panel.classList.add('hidden');
+});
+document.getElementById('toggleShow').addEventListener('click', function (e) {
+  e.stopPropagation();
+  panel.classList.remove('hidden');
+});
+
+if (window.innerWidth < 500) {
+  setTimeout(function () { panel.classList.add('hidden'); }, 2500);
+}
+
+// ---------- Input (Pointer Events) ----------
+let drawing = false, lastX = 0, lastY = 0, lastBloomTime = 0;
+const hint = document.getElementById('hint');
+const MIN_DRAG_DIST = 50;
+const MIN_DRAG_INTERVAL_MS = 90;
+
+function pointOnUI(target) {
+  if (!target || !target.closest) return false;
+  return !!(target.closest('#panel') || target.closest('#toggleShow') || target.closest('#errBox'));
+}
+
+function onPointerDown(e) {
+  if (pointOnUI(e.target)) return;
+  if (e.cancelable) e.preventDefault();
+  ensureAudio();
+  drawing = true;
+  lastX = e.clientX; lastY = e.clientY;
+  lastBloomTime = performance.now();
+  bloom(e.clientX, e.clientY, false);
+  if (hint) hint.style.display = 'none';
+}
+function onPointerMove(e) {
+  if (pointOnUI(e.target) && !drawing) return;
+  if (e.cancelable) e.preventDefault();
+  if (state.trail) {
+    const hue = (colorSel.value === 'rainbow') ? rainbowPhase : pickHue(colorSel.value);
+    trails.push(new Trail(e.clientX, e.clientY, hue));
+    while (trails.length > MAX_TRAILS) trails.shift();
+  }
+  if (drawing) {
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dt = performance.now() - lastBloomTime;
+    if (dist > MIN_DRAG_DIST && dt > MIN_DRAG_INTERVAL_MS) {
+      bloom(e.clientX, e.clientY, false);
+      lastX = e.clientX; lastY = e.clientY;
+      lastBloomTime = performance.now();
+    }
+  }
+}
+function onPointerUp() { drawing = false; }
+
+// Explicit {passive: false} so preventDefault works cleanly on iOS
+canvas.addEventListener('pointerdown',   onPointerDown, { passive: false });
+canvas.addEventListener('pointermove',   onPointerMove, { passive: false });
+canvas.addEventListener('pointerup',     onPointerUp);
+canvas.addEventListener('pointercancel', onPointerUp);
+canvas.addEventListener('pointerleave',  onPointerUp);
+
+function maybeAutoBloom(now) {
+  if (!state.addictive) return;
+  if (now - lastAutoBloom < DREAMY_INTERVAL_MS) return;
+  lastAutoBloom = now;
+  const x = 60 + Math.random() * Math.max(1, W - 120);
+  const y = 60 + Math.random() * Math.max(1, H - 120);
+  bloom(x, y, false);
+}
+
+function maybeSpawnShooting() {
+  if (Math.random() < 0.002) {
+    shootingStars.push({
+      x: Math.random() * W * 0.6,
+      y: Math.random() * H * 0.4,
+      vx: 5 + Math.random() * 4,
+      vy: 1.5 + Math.random() * 2,
+      life: 1
+    });
+  }
+}
+
+// ---------- Main loop ----------
+function drawFrame(now) {
+  ctx.fillStyle = state.trail ? 'rgba(7, 7, 26, 0.10)' : 'rgba(7, 7, 26, 0.22)';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let i = 0; i < stars.length; i++) {
+    const s = stars[i];
+    s.tw += s.twSpeed;
+    const br = 0.45 + Math.sin(s.tw) * 0.55;
+    ctx.fillStyle = 'hsla(' + s.hue + ', 45%, 88%, ' + (br * 0.8) + ')';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  maybeSpawnShooting();
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const ss = shootingStars[i];
+    ss.x += ss.vx; ss.y += ss.vy;
+    ss.life -= 0.012;
+    if (ss.life <= 0 || ss.x > W + 60 || ss.y > H + 60) {
+      shootingStars.splice(i, 1); continue;
+    }
+    ctx.strokeStyle = 'hsla(200, 80%, 92%, ' + ss.life + ')';
+    ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ss.x, ss.y);
+    ctx.lineTo(ss.x - ss.vx * 9, ss.y - ss.vy * 9);
+    ctx.stroke();
+  }
+
+  for (let i = trails.length - 1; i >= 0; i--) {
+    const t = trails[i];
+    t.update(); t.draw();
+    if (t.life <= 0) trails.splice(i, 1);
+  }
+
+  for (let i = mandalas.length - 1; i >= 0; i--) {
+    const m = mandalas[i];
+    try {
+      m.update();
+      if (!m.alive) { mandalas.splice(i, 1); continue; }
+      m.draw();
+    } catch (e) {
+      mandalas.splice(i, 1);
+    }
+  }
+
+  for (let i = sparkles.length - 1; i >= 0; i--) {
+    const s = sparkles[i];
+    s.update(); s.draw();
+    if (s.life <= 0) sparkles.splice(i, 1);
+  }
+
+  maybeAutoBloom(now);
+}
+
+function loop(now) {
+  try { drawFrame(now || 0); } catch (e) { /* keep loop alive */ }
+  requestAnimationFrame(loop);
+}
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  CX = W / 2; CY = H / 2;
+  canvas.width  = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  for (let i = 0; i < stars.length; i++) {
+    if (stars[i].x > W) stars[i].x = Math.random() * W;
+    if (stars[i].y > H) stars[i].y = Math.random() * H;
+  }
+}
+
+initStars();
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function () { setTimeout(resize, 100); });
+
+requestAnimationFrame(loop);
+
+})();
+</script>
+
+</body>
+</html>
